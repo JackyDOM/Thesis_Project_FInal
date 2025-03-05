@@ -13,14 +13,88 @@
     </div>
 
     <!-- Sidebar -->
-    <div class="fixed left-0 h-full w-[220px] bg-blue-900 text-white p-8 text-center text-4xl z-10" style="top: 65px;">
-        Sidebar
+    <div class="fixed left-0 h-full w-[220px] bg-blue-900 text-white p-8 text-center text-2xl z-10" style="top: 65px;">
+        <div class="mb-6">
+            <button class="w-full bg-blue-800 p-4 mb-4 rounded-lg hover:bg-blue-700" id="testCaseButton">Test Case</button>
+            <button class="w-full bg-blue-800 p-4 rounded-lg hover:bg-blue-700" id="dashboardButton">Dashboard</button>
+        </div>
     </div>
 
     <!-- Main Content -->
-    <div class="ml-[300px] mt-[120px] p-8">
-        <!-- Your main content goes here -->
-        Main Content
+    <div class="ml-[220px] mt-[120px] p-8 w-full">
+        <!-- Test Case Form (Displayed by default) -->
+        <div id="testCaseForm">
+            <h2 class="text-2xl font-bold mb-4">Test Case Form</h2>
+            <form action="#" method="POST" class="space-y-4">
+                <!-- Input fields -->
+                <div>
+                    <label for="name" class="block text-lg">Name</label>
+                    <input type="text" id="name" name="name" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="age" class="block text-lg">Age</label>
+                    <input type="number" id="age" name="age" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="genre" class="block text-lg">Genre</label>
+                    <input type="text" id="genre" name="genre" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="dob" class="block text-lg">Date of Birth</label>
+                    <input type="date" id="dob" name="dob" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="personality" class="block text-lg">Personality</label>
+                    <input type="text" id="personality" name="personality" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="job" class="block text-lg">Job</label>
+                    <input type="text" id="job" name="job" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <div>
+                    <label for="description" class="block text-lg">Description of Yourself</label>
+                    <textarea id="description" name="description" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" rows="4" required></textarea>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex space-x-4">
+                    <button type="submit" class="w-1/3 p-3 bg-red-600 text-white rounded-lg hover:bg-red-700">Submit</button>
+                    <button type="reset" class="w-1/3 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Reset</button>
+                    <button type="button" class="w-1/3 p-3 border border-black text-black bg-white rounded-lg hover:bg-gray-200">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Dashboard Text (Initially hidden) -->
+        <div id="dashboardText" class="hidden">
+            <h2 class="text-2xl font-bold mb-4">Dashboard</h2>
+        </div>
     </div>
+
+    <!-- Scripts -->
+    <script>
+        const testCaseButton = document.getElementById('testCaseButton');
+        const dashboardButton = document.getElementById('dashboardButton');
+        const testCaseForm = document.getElementById('testCaseForm');
+        const dashboardText = document.getElementById('dashboardText');
+
+        // When "Test Case" button is clicked
+        testCaseButton.addEventListener('click', () => {
+            testCaseForm.classList.remove('hidden'); // Show the Test Case form
+            dashboardText.classList.add('hidden'); // Hide the Dashboard text
+        });
+
+        // When "Dashboard" button is clicked
+        dashboardButton.addEventListener('click', () => {
+            testCaseForm.classList.add('hidden'); // Hide the Test Case form
+            dashboardText.classList.remove('hidden'); // Show the Dashboard text
+        });
+    </script>
 </body>
 </html>
