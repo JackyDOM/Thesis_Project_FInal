@@ -44,7 +44,7 @@
                                 <form onsubmit="return confirm('Are you sure you want to DELETE this student from the database?');" 
                                       action="{{ url_for('delete') }}" method="POST" style="display: inline;">
                                     <input type="hidden" name="id" value="{{ row['rowid'] }}">
-                                    <input type="submit1" value="Delete" class="btn btn-delete b">
+                                    <input type="submit" value="Delete" class="btn btn-delete">
                                 </form>
                             </td>
                         </tr>

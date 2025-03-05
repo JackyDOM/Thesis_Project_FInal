@@ -160,28 +160,12 @@ input[type="submit"] {
     align-self: center;
 }
 
-input[type="submit1"] {
-    background-color: #b40c22;
-    color: white;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-top: 10px;
-    font-weight: bold;
-    transition: background-color 0.3s ease;
-    width: 150px;
-    align-self: center;
-}
 
 input[type="submit"]:hover {
     background-color: #0056b3;
 }
 
-input[type="submit1"]:hover {
-    background-color: #b40c22;
-}
+
 
 /* Navbar Styling */
 .navbar {
