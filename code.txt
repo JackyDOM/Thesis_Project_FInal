@@ -1,9 +1,41 @@
-from flask import request
-from flask_restx import Resource, fields, Namespace
-from models.user_model import db, User
+from flask import Flask, render_template, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_restx import Api, Resource, fields, Namespace
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SQLAlchemy
+db = SQLAlchemy(app)
+
+# Initialize Flask-RESTX API
+api = Api(app, version='1.0', title='My API', description='A simple API', doc='/swagger/')
+
+# Define the User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    age = db.Column(db.Integer, nullable=False)
+    genre = db.Column(db.String(50), nullable=False)
+    dob = db.Column(db.String(50), nullable=False)
+    personality = db.Column(db.String(100), nullable=False)
+    job = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(500), nullable=False)
+
+    def __init__(self, name, age, genre, dob, personality, job, description):
+        self.name = name
+        self.age = age
+        self.genre = genre
+        self.dob = dob
+        self.personality = personality
+        self.job = job
+        self.description = description
 
 # Create a namespace for User Information
 user_ns = Namespace('User_Information', description='Operations related to user information')
+api.add_namespace(user_ns)
 
 # Define the user model for Swagger UI input validation
 user_input_model = user_ns.model('User', {
@@ -117,3 +149,15 @@ class UserList(Resource):
             'data': users_list
         }
         return response, 200
+
+# Dashboard route
+@app.route('/dashboard')
+def dashboard():
+    return render_template('layout.html')
+
+# Initialize the database
+with app.app_context():
+    db.create_all()
+
+if __name__ == '__main__':
+    app.run(debug=True)

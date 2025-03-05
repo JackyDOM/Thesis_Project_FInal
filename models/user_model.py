@@ -1,8 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 
+# Initialize SQLAlchemy (will be bound to the app in app.py)
 db = SQLAlchemy()
 
-# Define the User table using SQLAlchemy ORM
+# Define the User model
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
