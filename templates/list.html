@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}
+    List All Students
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <h1>List of Students</h1>
+        {% if rows|length > 0 %}
+            <div class="table-wrapper">
+                <table class="student-table">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>First Name</th>
+                            <th>Second Name</th>
+                            <th>Age</th>
+                            <th>Gender</th>
+                            <th>Email</th>
+                            <th>School Name</th>
+                            <th>Address</th>
+                            <th>City</th>
+                            <th>Zip</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row["rowid"] }}</td>
+                            <td>{{ row["first_name"] }}</td>
+                            <td>{{ row["second_name"] }}</td>
+                            <td>{{ row["age"] }}</td>
+                            <td>{{ row["gender"] }}</td>
+                            <td>{{ row["email"] }}</td>
+                            <td>{{ row["school_name"] }}</td>
+                            <td>{{ row["addr"] }}</td>
+                            <td>{{ row["city"] }}</td>
+                            <td>{{ row["zip"] }}</td>
+                            <td>
+                                <form action="{{ url_for('edit') }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="id" value="{{ row['rowid'] }}">
+                                    <input type="submit" value="Edit" class="btn btn-edit">
+                                </form>
+                                <form onsubmit="return confirm('Are you sure you want to DELETE this student from the database?');" 
+                                      action="{{ url_for('delete') }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="id" value="{{ row['rowid'] }}">
+                                    <input type="submit1" value="Delete" class="btn btn-delete b">
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="no-data">No students found in the database.</p>
+        {% endif %}
+    </div>
+{% endblock %}

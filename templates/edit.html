@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% block title %}
+    Edit Student
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <h1>Edit Student Record</h1>
+        {% for row in rows %}
+        <form action="{{ url_for('editrec') }}" method="POST" class="student-form">
+            <h3>Student ID: {{ row['rowid'] }}</h3>
+            <input type="hidden" name="rowid" value="{{ row['rowid'] }}">
+
+            <div class="form-group">
+                <label for="first_name">First Name</label>
+                <input type="text" id="first_name" name="first_name" value="{{ row['first_name'] }}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="second_name">Second Name</label>
+                <input type="text" id="second_name" name="second_name" value="{{ row['second_name'] }}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" name="age" value="{{ row['age'] }}" min="1" required />
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" name="gender" required>
+                    <option value="Male" {% if row['gender'] == 'Male' %}selected{% endif %}>Male</option>
+                    <option value="Female" {% if row['gender'] == 'Female' %}selected{% endif %}>Female</option>
+                    <option value="Other" {% if row['gender'] == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" value="{{ row['email'] }}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="school_name">School Name</label>
+                <input type="text" id="school_name" name="school_name" value="{{ row['school_name'] }}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="add">Address</label>
+                <textarea id="add" name="add" required>{{ row['addr'] }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="city">City</label>
+                <input type="text" id="city" name="city" value="{{ row['city'] }}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="zip">Zip Code</label>
+                <input type="text" id="zip" name="zip" value="{{ row['zip'] }}" pattern="[0-9]{5}" title="Enter a valid 5-digit Zip Code" required />
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="Submit" />
+            </div>
+        </form>
+        {% endfor %}
+    </div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% block title %}
+    Add New Student
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <h1>Add New Student</h1>
+        <form action="{{ url_for('addrec') }}" method="POST" class="student-form">
+            <h3>Please Add the New Student Information:</h3>
+
+            <div class="form-group">
+                <label for="first_name">First Name</label>
+                <input type="text" id="first_name" name="first_name" required />
+            </div>
+
+            <div class="form-group">
+                <label for="second_name">Second Name</label>
+                <input type="text" id="second_name" name="second_name" required />
+            </div>
+
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" name="age" min="1" required />
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" name="gender" required>
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required />
+            </div>
+
+            <div class="form-group">
+                <label for="school_name">School Name</label>
+                <input type="text" id="school_name" name="school_name" required />
+            </div>
+
+            <div class="form-group">
+                <label for="add">Address</label>
+                <textarea id="add" name="add" required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="city">City</label>
+                <input type="text" id="city" name="city" required />
+            </div>
+
+            <div class="form-group">
+                <label for="zip">Zip Code</label>
+                <input type="text" id="zip" name="zip" pattern="[0-9]{5}" title="Enter a valid 5-digit Zip Code" required />
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="Submit" />
+            </div>
+        </form>
+    </div>
+{% endblock %}
