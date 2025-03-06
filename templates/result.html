@@ -1,7 +1,80 @@
 {% extends "layout.html" %}
 {% block title %}
-Transaction Result
+    Transaction Result
 {% endblock %}
 {% block content %}
-        <strong>Result of the database transaction:</strong> {{ msg }}  
+    <div class="policy-container">
+        {% if data.error %}
+            <p>Error: {{ data.error }}</p>
+        {% elif data.message %}
+            <p>{{ data.message }}</p>
+        {% else %}
+            <div class="policy-header">
+                Contract Status: {{ data.contract_status }} | Premium Status: {{ data.premium_status }} | Register: {{ data.register }}
+            </div>
+            <div class="life-assured">
+                Life Assured: {{ data.policy_id }} {{ data.first_name }} {{ data.second_name }}
+            </div>
+            <div class="options">
+                Select: 1 - Financial Details  2 - Fund Movements
+            </div>
+            <table class="transaction-table">
+                <thead>
+                    <tr>
+                        <th>Sel</th>
+                        <th>Tran Date</th>
+                        <th>Eff Date</th>
+                        <th>Code</th>
+                        <th>Description</th>
+                        <th>Loc</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tran in data.transactions %}
+                        <tr>
+                            <td>{{ tran.sel }}</td>
+                            <td>{{ tran.tran_date }}</td>
+                            <td>{{ tran.eff_date }}</td>
+                            <td>{{ tran.code }}</td>
+                            <td>{{ tran.description }}</td>
+                            <td>{{ tran.loc }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="user-input">
+                [User Input: Enter Policy ID]
+            </div>
+            <div class="updated-data">
+                [Display Updated with New Data]
+            </div>
+        {% endif %}
+    </div>
+
+    <style>
+        .policy-container {
+            background-color: black;
+            color: #00ff00; /* Green text */
+            font-family: monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 20px auto;
+            border: 1px solid #00ff00;
+        }
+        .policy-header, .life-assured, .options, .user-input, .updated-data {
+            margin-bottom: 10px;
+        }
+        .transaction-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        .transaction-table th, .transaction-table td {
+            padding: 5px;
+            text-align: left;
+        }
+        .transaction-table th {
+            border-bottom: 1px solid #00ff00;
+        }
+    </style>
 {% endblock %}

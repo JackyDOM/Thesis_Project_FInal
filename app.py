@@ -70,46 +70,44 @@ def addrec():
                     VALUES (?,?,?,?,?,?,?,?,?)
                 """, (first_name, second_name, age, gender, email, school_name, addr, city, zip_code))
                 con.commit()
-                print(f"Database: Added {first_name} {second_name}")
+                # Get the last inserted rowid as a pseudo policy_id
+                policy_id = cur.lastrowid
 
-            # Create/Open the Excel file (students.xlsx) and add the data
+            # Create/Open the Excel file and append data (unchanged)
             file_path = os.path.join(app.static_folder, 'students.xlsx')
-            print(f"Excel file path: {file_path}")
-
-            if not os.path.exists(file_path):  # If file doesn't exist, create a new one with headers
+            if not os.path.exists(file_path):
                 wb = Workbook()
                 ws = wb.active
                 ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 'Zip Code'])
-                print("Excel: Created new file with headers")
-            else:  # If file exists, load it to preserve existing data
-                try:
-                    wb = openpyxl.load_workbook(file_path)
-                    ws = wb.active
-                    print(f"Excel: Loaded file with {ws.max_row} rows")
-                except Exception as excel_load_error:
-                    raise Exception(f"Failed to load Excel file: {str(excel_load_error)}")
-
-            # Append new student record to the Excel sheet
+            else:
+                wb = openpyxl.load_workbook(file_path)
+                ws = wb.active
             ws.append([first_name, second_name, age, gender, email, school_name, addr, city, zip_code])
-            print(f"Excel: Appended {first_name} {second_name}, total rows now: {ws.max_row}")
+            wb.save(file_path)
 
-            # Save the file
-            try:
-                wb.save(file_path)
-                print("Excel: File saved successfully")
-            except Exception as excel_save_error:
-                raise Exception(f"Failed to save Excel file: {str(excel_save_error)}")
+            # Prepare data for the template
+            data = {
+                "policy_id": f"POL{policy_id:05d}",  # Example: POL00001
+                "first_name": first_name,
+                "second_name": second_name,
+                "contract_status": "In Force",
+                "premium_status": "Prm Paying",
+                "register": "IN",
+                "transactions": [
+                    {"sel": "00010", "tran_date": "29/03/2022", "eff_date": "29/03/2022", "code": "B633", "description": "Unit Dealing", "loc": "P"},
+                    {"sel": "00009", "tran_date": "29/03/2022", "eff_date": "29/03/2022", "code": "B674", "description": "Renewals Benefit Billing", "loc": "P"}
+                ]
+            }
+            return render_template('result.html', data=data)
 
-            msg = "Record successfully added to the database and Excel file"
         except Exception as e:
             if 'con' in locals():
                 con.rollback()
             msg = f"Error in the INSERT: {str(e)}"
-            print(f"Error: {msg}")
+            return render_template('result.html', data={"error": msg})
         finally:
             if 'con' in locals():
                 con.close()
-            return render_template('result.html', msg=msg)
 
 # Route to SELECT all data from the database and display in a table      
 @app.route('/list')
@@ -193,22 +191,26 @@ def delete():
             # Step 3: Rewrite the Excel file with the updated data
             wb = Workbook()
             ws = wb.active
-            # Add headers
             ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 'Zip Code'])
-            # Add remaining rows (if any)
             for row in rows:
                 ws.append(row)
             wb.save(file_path)
 
-            msg = "Record successfully deleted from the database and Excel file"
+            # Prepare data for the template (success case)
+            data = {
+                "message": "Record successfully deleted from the database and Excel file"
+            }
         except Exception as e:
             if 'con' in locals():
                 con.rollback()
-            msg = f"Error in the DELETE: {str(e)}"
+            # Prepare data for the template (error case)
+            data = {
+                "error": f"Error in the DELETE: {str(e)}"
+            }
         finally:
             if 'con' in locals():
                 con.close()
-            return render_template('result.html', msg=msg)
+            return render_template('result.html', data=data)
 
 if __name__ == "__main__":
     app.run(debug=True)
