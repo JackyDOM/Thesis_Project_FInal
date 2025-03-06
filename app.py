@@ -178,16 +178,36 @@ def delete():
     if request.method == 'POST':
         try:
             rowid = request.form['id']
+            file_path = os.path.join(app.static_folder, 'students.xlsx')
+
+            # Step 1: Delete the record from the database
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("DELETE FROM students WHERE rowid=?", (rowid,))
                 con.commit()
-                msg = "Record successfully deleted from the database"
-        except:
-            con.rollback()
-            msg = "Error in the DELETE"
+
+                # Step 2: Fetch all remaining records from the database
+                cur.execute("SELECT * FROM students")
+                rows = cur.fetchall()
+
+            # Step 3: Rewrite the Excel file with the updated data
+            wb = Workbook()
+            ws = wb.active
+            # Add headers
+            ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 'Zip Code'])
+            # Add remaining rows (if any)
+            for row in rows:
+                ws.append(row)
+            wb.save(file_path)
+
+            msg = "Record successfully deleted from the database and Excel file"
+        except Exception as e:
+            if 'con' in locals():
+                con.rollback()
+            msg = f"Error in the DELETE: {str(e)}"
         finally:
-            con.close()
+            if 'con' in locals():
+                con.close()
             return render_template('result.html', msg=msg)
 
 if __name__ == "__main__":
