@@ -46,6 +46,10 @@
                                     <input type="hidden" name="id" value="{{ row['rowid'] }}">
                                     <input type="submit" value="Delete" class="btn btn-delete">
                                 </form>
+                                <form action="{{ url_for('run') }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="id" value="{{ row['rowid'] }}">
+                                    <input type="submit" value="Run" class="btn btn-run">
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}

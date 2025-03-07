@@ -10,6 +10,8 @@ from datetime import datetime
 from openpyxl import Workbook
 import openpyxl  # Add this line to fix the issue
 import os
+import random
+import string
 
 app = Flask(__name__)
 
@@ -28,6 +30,17 @@ def init_db():
                 addr TEXT,
                 city TEXT,
                 zip TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                policy_id TEXT,
+                sel TEXT,
+                tran_date TEXT,
+                eff_date TEXT,
+                code TEXT,
+                description TEXT,
+                loc TEXT
             )
         """)
         con.commit()
@@ -69,11 +82,46 @@ def addrec():
                     (first_name, second_name, age, gender, email, school_name, addr, city, zip) 
                     VALUES (?,?,?,?,?,?,?,?,?)
                 """, (first_name, second_name, age, gender, email, school_name, addr, city, zip_code))
-                con.commit()
-                # Get the last inserted rowid as a pseudo policy_id
                 policy_id = cur.lastrowid
+                policy_id_str = f"POL{policy_id:05d}"
 
-            # Create/Open the Excel file and append data (unchanged)
+                # Get the actual submission date
+                submission_date = datetime.now().strftime("%d/%m/%Y")  # e.g., "06/03/2025"
+
+                # Generate random sel (5-digit number) and code (e.g., B followed by 3 digits)
+                def generate_random_sel():
+                    return f"{random.randint(10000, 99999):05d}"  # Random 5-digit number
+
+                def generate_random_code():
+                    return f"B{random.randint(100, 999)}"
+
+                # Prepare dynamic transactions and insert into database
+                transactions = [
+                    {
+                        "sel": generate_random_sel(),
+                        "tran_date": submission_date,
+                        "eff_date": submission_date,
+                        "code": generate_random_code(),
+                        "description": f"Student Registration - {first_name} {second_name}",
+                        "loc": "P"
+                    },
+                    {
+                        "sel": generate_random_sel(),
+                        "tran_date": submission_date,
+                        "eff_date": submission_date,
+                        "code": generate_random_code(),
+                        "description": f"School Assignment - {school_name}",
+                        "loc": "P"
+                    }
+                ]
+                for tran in transactions:
+                    cur.execute("""
+                        INSERT INTO transactions (policy_id, sel, tran_date, eff_date, code, description, loc)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (policy_id_str, tran["sel"], tran["tran_date"], tran["eff_date"], tran["code"], tran["description"], tran["loc"]))
+                con.commit()
+
+            # Create/Open the Excel file and append data
             file_path = os.path.join(app.static_folder, 'students.xlsx')
             if not os.path.exists(file_path):
                 wb = Workbook()
@@ -87,16 +135,13 @@ def addrec():
 
             # Prepare data for the template
             data = {
-                "policy_id": f"POL{policy_id:05d}",  # Example: POL00001
+                "policy_id": policy_id_str,
                 "first_name": first_name,
                 "second_name": second_name,
                 "contract_status": "In Force",
                 "premium_status": "Prm Paying",
                 "register": "IN",
-                "transactions": [
-                    {"sel": "00010", "tran_date": "29/03/2022", "eff_date": "29/03/2022", "code": "B633", "description": "Unit Dealing", "loc": "P"},
-                    {"sel": "00009", "tran_date": "29/03/2022", "eff_date": "29/03/2022", "code": "B674", "description": "Renewals Benefit Billing", "loc": "P"}
-                ]
+                "transactions": transactions
             }
             return render_template('result.html', data=data)
 
@@ -108,6 +153,41 @@ def addrec():
         finally:
             if 'con' in locals():
                 con.close()
+
+@app.route("/run", methods=['POST'])
+def run():
+    try:
+        rowid = request.form['id']
+        with sqlite3.connect("database.db") as con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            # Fetch student data
+            cur.execute("SELECT * FROM students WHERE rowid = ?", (rowid,))
+            student = cur.fetchone()
+            if not student:
+                return render_template('result.html', data={"error": "Student not found"})
+
+            # Fetch transactions
+            policy_id = f"POL{int(rowid):05d}"
+            cur.execute("SELECT sel, tran_date, eff_date, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
+            transactions = [{"sel": row[0], "tran_date": row[1], "eff_date": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
+            if not transactions:  # Optional: Handle case where no transactions exist
+                transactions = []
+
+        # Prepare data for the template
+        data = {
+            "policy_id": policy_id,
+            "first_name": student["first_name"],
+            "second_name": student["second_name"],
+            "contract_status": "In Force",
+            "premium_status": "Prm Paying",
+            "register": "IN",
+            "transactions": transactions
+        }
+        return render_template('result.html', data=data)
+
+    except Exception as e:
+        return render_template('result.html', data={"error": f"Error in RUN: {str(e)}"})
 
 # Route to SELECT all data from the database and display in a table      
 @app.route('/list')
@@ -177,11 +257,15 @@ def delete():
         try:
             rowid = request.form['id']
             file_path = os.path.join(app.static_folder, 'students.xlsx')
+            policy_id = f"POL{int(rowid):05d}"  # Calculate policy_id for transactions
 
-            # Step 1: Delete the record from the database
+            # Step 1: Delete the record from the database (students and transactions)
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
+                # Delete from students table
                 cur.execute("DELETE FROM students WHERE rowid=?", (rowid,))
+                # Delete associated transactions
+                cur.execute("DELETE FROM transactions WHERE policy_id=?", (policy_id,))
                 con.commit()
 
                 # Step 2: Fetch all remaining records from the database

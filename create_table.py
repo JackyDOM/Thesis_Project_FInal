@@ -11,12 +11,34 @@
 
 import sqlite3
 
-conn = sqlite3.connect('database.db')
-print("Connected to database successfully")
+# Connect to the database
+with sqlite3.connect('database.db') as con:
+    cur = con.cursor()
+    
+    # Fetch all transactions for POL00001
+    cur.execute("SELECT sel, tran_date, eff_date, code, description, loc FROM transactions WHERE policy_id = 'POL00001'")
+    transactions = cur.fetchall()
+    print("All transactions for POL00001:", transactions)
 
-# conn.execute('CREATE TABLE students (name TEXT, addr TEXT, city TEXT, zip TEXT)')
-conn.execute('CREATE TABLE students (first_name TEXT, second_name TEXT, age TEXT, gender Text, email Text, addr TEXT, city TEXT, zip TEXT, school_name TEXT)')
-print("Created table successfully!")
+    # Keep only the latest two transactions (assuming ordered by insertion)
+    if len(transactions) > 2:
+        cur.execute("""
+            DELETE FROM transactions 
+            WHERE policy_id = 'POL00001' 
+            AND sel NOT IN (
+                SELECT sel FROM transactions 
+                WHERE policy_id = 'POL00001' 
+                ORDER BY rowid DESC 
+                LIMIT 2
+            )
+        """)
+        con.commit()
+        print("Cleaned up old transactions, kept only the latest 2.")
+    else:
+        print("No cleanup needed, only 2 or fewer transactions exist.")
 
-conn.close()
+    # Verify remaining transactions
+    cur.execute("SELECT sel, tran_date, eff_date, code, description, loc FROM transactions WHERE policy_id = 'POL00001'")
+    remaining = cur.fetchall()
+    print("Remaining transactions:", remaining)
 
