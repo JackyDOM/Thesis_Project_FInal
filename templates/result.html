@@ -51,6 +51,57 @@
         {% endif %}
     </div>
 
+    <!-- Detail Table Outside policy-container -->
+    {% if not data.error and not data.message %}
+    <div class="container">
+        <h3>Detail</h3>
+        <div class="table-wrapper">
+            <table class="student-table">
+                <thead>
+                    <tr>
+                        <th>First Name</th>
+                        <th>Second Name</th>
+                        <th>Age</th>
+                        <th>Gender</th>
+                        <th>Email</th>
+                        <th>School Name</th>
+                        <th>Address</th>
+                        <th>City</th>
+                        <th>Zip</th>
+                        <th>SEL</th>
+                        <th>Tran Date</th>
+                        <th>Eff Date</th>
+                        <th>Code</th>
+                        <th>Description</th>
+                        <th>Loc</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for detail in data.detail_data %}
+                    <tr>
+                        <td>{{ detail.first_name }}</td>
+                        <td>{{ detail.second_name }}</td>
+                        <td>{{ detail.age }}</td>
+                        <td>{{ detail.gender }}</td>
+                        <td>{{ detail.email }}</td>
+                        <td>{{ detail.school_name }}</td>
+                        <td>{{ detail.addr }}</td>
+                        <td>{{ detail.city }}</td>
+                        <td>{{ detail.zip }}</td>
+                        <td>{{ detail.sel }}</td>
+                        <td>{{ detail.tran_date }}</td>
+                        <td>{{ detail.eff_date }}</td>
+                        <td>{{ detail.code }}</td>
+                        <td>{{ detail.description }}</td>
+                        <td>{{ detail.loc }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <style>
         .policy-container {
             background-color: black;

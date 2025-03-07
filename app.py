@@ -88,7 +88,7 @@ def addrec():
                 # Get the actual submission date
                 submission_date = datetime.now().strftime("%d/%m/%Y")  # e.g., "06/03/2025"
 
-                # Generate random sel (5-digit number) and code (e.g., B followed by 3 digits)
+                # Generate random sel and code
                 def generate_random_sel():
                     return f"{random.randint(10000, 99999):05d}"  # Random 5-digit number
 
@@ -110,7 +110,7 @@ def addrec():
                         "tran_date": submission_date,
                         "eff_date": submission_date,
                         "code": generate_random_code(),
-                        "description": f"School Assignment - {school_name}",
+                        "description": f"School Name - {school_name}",
                         "loc": "P"
                     }
                 ]
@@ -133,6 +133,27 @@ def addrec():
             ws.append([first_name, second_name, age, gender, email, school_name, addr, city, zip_code])
             wb.save(file_path)
 
+            # Prepare detailed data for the template
+            detail_data = [
+                {
+                    "first_name": first_name,
+                    "second_name": second_name,
+                    "age": age,
+                    "gender": gender,
+                    "email": email,
+                    "school_name": school_name,
+                    "addr": addr,
+                    "city": city,
+                    "zip": zip_code,
+                    "sel": tran["sel"],
+                    "tran_date": tran["tran_date"],
+                    "eff_date": tran["eff_date"],
+                    "code": tran["code"],
+                    "description": tran["description"],
+                    "loc": tran["loc"]
+                } for tran in transactions
+            ]
+
             # Prepare data for the template
             data = {
                 "policy_id": policy_id_str,
@@ -141,7 +162,8 @@ def addrec():
                 "contract_status": "In Force",
                 "premium_status": "Prm Paying",
                 "register": "IN",
-                "transactions": transactions
+                "transactions": transactions,
+                "detail_data": detail_data  # Add detail data here
             }
             return render_template('result.html', data=data)
 
@@ -171,8 +193,29 @@ def run():
             policy_id = f"POL{int(rowid):05d}"
             cur.execute("SELECT sel, tran_date, eff_date, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
             transactions = [{"sel": row[0], "tran_date": row[1], "eff_date": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
-            if not transactions:  # Optional: Handle case where no transactions exist
+            if not transactions:
                 transactions = []
+
+            # Prepare detailed data combining student and transaction info
+            detail_data = [
+                {
+                    "first_name": student["first_name"],
+                    "second_name": student["second_name"],
+                    "age": student["age"],
+                    "gender": student["gender"],
+                    "email": student["email"],
+                    "school_name": student["school_name"],
+                    "addr": student["addr"],
+                    "city": student["city"],
+                    "zip": student["zip"],
+                    "sel": tran["sel"],
+                    "tran_date": tran["tran_date"],
+                    "eff_date": tran["eff_date"],
+                    "code": tran["code"],
+                    "description": tran["description"],
+                    "loc": tran["loc"]
+                } for tran in transactions
+            ]
 
         # Prepare data for the template
         data = {
@@ -182,7 +225,8 @@ def run():
             "contract_status": "In Force",
             "premium_status": "Prm Paying",
             "register": "IN",
-            "transactions": transactions
+            "transactions": transactions,
+            "detail_data": detail_data  # Add detail data here
         }
         return render_template('result.html', data=data)
 
