@@ -12,6 +12,7 @@ import openpyxl  # Add this line to fix the issue
 import os
 import random
 import string
+import re
 
 app = Flask(__name__)
 
@@ -59,6 +60,10 @@ def enternew():
     return render_template("student.html")
 
 # Route to add a new record (INSERT) student data to the database and export to Excel
+# Add this import at the top with other imports
+import re
+
+# Modified /addrec route
 @app.route("/addrec", methods=['POST', 'GET'])
 def addrec():
     if request.method == 'POST':
@@ -74,7 +79,33 @@ def addrec():
             city = request.form['city']
             zip_code = request.form['zip']
 
-            # Connect to SQLite3 database and execute the INSERT
+            # Define a function to check for special characters
+            def has_special_characters(text):
+                # Allow only alphanumeric characters, spaces, and basic punctuation
+                pattern = r'^[a-zA-Z0-9\s.,-]+$'
+                return not bool(re.match(pattern, text))
+
+            # Check fields that shouldn't have special characters
+            fields_to_check = {
+                'First Name': first_name,
+                'Second Name': second_name,
+                'School Name': school_name,
+                'Address': addr,
+                'City': city
+            }
+            
+            # Check for special characters in each field
+            for field_name, value in fields_to_check.items():
+                if has_special_characters(value):
+                    msg = f"No special characters allowed in {field_name}"
+                    return render_template('result.html', data={"error": msg})
+
+            # Validate email separately (allowing @ and .)
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email):
+                return render_template('result.html', data={"error": "Invalid email format"})
+
+            # If we reach here, no special characters were found, proceed with insertion
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("""
@@ -85,17 +116,15 @@ def addrec():
                 policy_id = cur.lastrowid
                 policy_id_str = f"POL{policy_id:05d}"
 
-                # Get the actual submission date
-                submission_date = datetime.now().strftime("%d/%m/%Y")  # e.g., "06/03/2025"
-
-                # Generate random sel and code
+                # Rest of your existing code for transactions...
+                submission_date = datetime.now().strftime("%d/%m/%Y")
+                
                 def generate_random_sel():
-                    return f"{random.randint(10000, 99999):05d}"  # Random 5-digit number
+                    return f"{random.randint(10000, 99999):05d}"
 
                 def generate_random_code():
                     return f"B{random.randint(100, 999)}"
 
-                # Prepare dynamic transactions and insert into database
                 transactions = [
                     {
                         "sel": generate_random_sel(),
@@ -121,7 +150,7 @@ def addrec():
                     """, (policy_id_str, tran["sel"], tran["tran_date"], tran["eff_date"], tran["code"], tran["description"], tran["loc"]))
                 con.commit()
 
-            # Create/Open the Excel file and append data
+            # Rest of your existing code for Excel and rendering...
             file_path = os.path.join(app.static_folder, 'students.xlsx')
             if not os.path.exists(file_path):
                 wb = Workbook()
@@ -133,7 +162,6 @@ def addrec():
             ws.append([first_name, second_name, age, gender, email, school_name, addr, city, zip_code])
             wb.save(file_path)
 
-            # Prepare detailed data for the template
             detail_data = [
                 {
                     "first_name": first_name,
@@ -145,25 +173,29 @@ def addrec():
                     "addr": addr,
                     "city": city,
                     "zip": zip_code,
-                    "sel": tran["sel"],
-                    "tran_date": tran["tran_date"],
-                    "eff_date": tran["eff_date"],
-                    "code": tran["code"],
-                    "description": tran["description"],
+                    "sel": transactions[0]["sel"],
+                    "tran_date": transactions[0]["tran_date"],
+                    "eff_date": transactions[0]["eff_date"],
+                    "code": transactions[0]["code"],
+                    "description": transactions[0]["description"],
+                    "loc": transactions[0]["loc"],
                     "loc": tran["loc"]
-                } for tran in transactions
+                } 
             ]
 
-            # Prepare data for the template
+             # Add subsequent transactions with only description
+            for tran in transactions[1:]:
+                detail_data.append({"description": tran["description"]})
+
             data = {
                 "policy_id": policy_id_str,
                 "first_name": first_name,
                 "second_name": second_name,
                 "contract_status": "In Force",
                 "premium_status": "Prm Paying",
-                "register": "IN",
+                "city": city,  # Changed from "register" to "city"
                 "transactions": transactions,
-                "detail_data": detail_data  # Add detail data here
+                "detail_data": detail_data
             }
             return render_template('result.html', data=data)
 
@@ -175,6 +207,7 @@ def addrec():
         finally:
             if 'con' in locals():
                 con.close()
+
 
 @app.route("/run", methods=['POST'])
 def run():
@@ -196,7 +229,7 @@ def run():
             if not transactions:
                 transactions = []
 
-            # Prepare detailed data combining student and transaction info
+            # Prepare detailed data with only the first transaction
             detail_data = [
                 {
                     "first_name": student["first_name"],
@@ -208,14 +241,14 @@ def run():
                     "addr": student["addr"],
                     "city": student["city"],
                     "zip": student["zip"],
-                    "sel": tran["sel"],
-                    "tran_date": tran["tran_date"],
-                    "eff_date": tran["eff_date"],
-                    "code": tran["code"],
-                    "description": tran["description"],
-                    "loc": tran["loc"]
-                } for tran in transactions
-            ]
+                    "sel": transactions[0]["sel"],              # First transaction only
+                    "tran_date": transactions[0]["tran_date"],
+                    "eff_date": transactions[0]["eff_date"],
+                    "code": transactions[0]["code"],
+                    "description": transactions[0]["description"],  # "Student Registration - Sophea Oudom"
+                    "loc": transactions[0]["loc"]
+                }
+            ] if transactions else []  # Ensure detail_data is empty if no transactions
 
         # Prepare data for the template
         data = {
@@ -224,9 +257,9 @@ def run():
             "second_name": student["second_name"],
             "contract_status": "In Force",
             "premium_status": "Prm Paying",
-            "register": "IN",
-            "transactions": transactions,
-            "detail_data": detail_data  # Add detail data here
+            "city": student["city"],            
+            "transactions": transactions,  # Keep all transactions for the transaction table
+            "detail_data": detail_data     # Only one entry for the detail table
         }
         return render_template('result.html', data=data)
 
@@ -287,12 +320,15 @@ def editrec():
                 """, (first_name, second_name, age, gender, email, school_name, addr, city, zip_code, rowid))
                 con.commit()
                 msg = "Record successfully edited in the database"
+                data = {"message": msg}  # Pass success message in data dictionary
+
         except Exception as e:
             con.rollback()
             msg = f"Error in the Edit: {str(e)}"
+            data = {"error": msg}  # Pass error message in data dictionary
         finally:
             con.close()
-            return render_template('result.html', msg=msg)
+            return render_template('result.html', data=data)  # Return data instead of msg
 
 # Route used to DELETE a specific record in the database    
 @app.route("/delete", methods=['POST', 'GET'])
