@@ -162,6 +162,7 @@ def addrec():
             ws.append([first_name, second_name, age, gender, email, school_name, addr, city, zip_code])
             wb.save(file_path)
 
+            # Modified detail_data to include only the first transaction
             detail_data = [
                 {
                     "first_name": first_name,
@@ -178,24 +179,17 @@ def addrec():
                     "eff_date": transactions[0]["eff_date"],
                     "code": transactions[0]["code"],
                     "description": transactions[0]["description"],
-                    "loc": transactions[0]["loc"],
-                    "loc": tran["loc"]
-                } 
+                    "loc": transactions[0]["loc"]
+                }
             ]
-
-             # Add subsequent transactions with only description
-            for tran in transactions[1:]:
-                detail_data.append({"description": tran["description"]})
 
             data = {
                 "policy_id": policy_id_str,
                 "first_name": first_name,
                 "second_name": second_name,
-                "contract_status": "In Force",
-                "premium_status": "Prm Paying",
-                "city": city,  # Changed from "register" to "city"
-                "transactions": transactions,
-                "detail_data": detail_data
+                "city": city,  
+                "transactions": transactions,  # Keep all transactions for potential use elsewhere
+                "detail_data": detail_data     # Only one entry for display
             }
             return render_template('result.html', data=data)
 
@@ -255,8 +249,6 @@ def run():
             "policy_id": policy_id,
             "first_name": student["first_name"],
             "second_name": student["second_name"],
-            "contract_status": "In Force",
-            "premium_status": "Prm Paying",
             "city": student["city"],            
             "transactions": transactions,  # Keep all transactions for the transaction table
             "detail_data": detail_data     # Only one entry for the detail table

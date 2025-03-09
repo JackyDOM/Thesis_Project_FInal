@@ -10,13 +10,13 @@
             <p>{{ data.message }}</p>
         {% else %}
             <div class="policy-header">
-                Contract Status: {{ data.contract_status }} | Premium Status: {{ data.premium_status }} | City: {{ data.city }}
+                City: {{ data.city }}
             </div>
             <div class="life-assured">
-                Life Assured: {{ data.policy_id }} {{ data.first_name }} {{ data.second_name }}
+                Student: {{ data.policy_id }} {{ data.first_name }} {{ data.second_name }}
             </div>
             <div class="options">
-                Select: 1 - Financial Details  2 - Fund Movements
+                Select: 1 - Student Details
             </div>
             <table class="transaction-table">
                 <thead>
@@ -63,49 +63,71 @@
     <!-- Detail Table Outside policy-container -->
     {% if not data.error and not data.message %}
     <div class="container">
-        <h3>Detail</h3>
-        <div class="table-wrapper">
-            <table class="student-table">
-                <thead>
-                    <tr>
-                        <th>First Name</th>
-                        <th>Second Name</th>
-                        <th>Age</th>
-                        <th>Gender</th>
-                        <th>Email</th>
-                        <th>School Name</th>
-                        <th>Address</th>
-                        <th>City</th>
-                        <th>Zip</th>
-                        <th>SEL</th>
-                        <th>Tran Date</th>
-                        <th>Eff Date</th>
-                        <th>Code</th>
-                        <th>Description</th>
-                        <th>Loc</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for detail in data.detail_data %}
-                    <tr>
-                        <td>{{ detail.first_name }}</td>
-                        <td>{{ detail.second_name }}</td>
-                        <td>{{ detail.age }}</td>
-                        <td>{{ detail.gender }}</td>
-                        <td>{{ detail.email }}</td>
-                        <td>{{ detail.school_name }}</td>
-                        <td>{{ detail.addr }}</td>
-                        <td>{{ detail.city }}</td>
-                        <td>{{ detail.zip }}</td>
-                        <td>{{ detail.sel }}</td>
-                        <td>{{ detail.tran_date }}</td>
-                        <td>{{ detail.eff_date }}</td>
-                        <td>{{ detail.code }}</td>
-                        <td>{{ detail.description }}</td>
-                        <td>{{ detail.loc }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+        <h3>Test-Case Detail</h3>
+        <div class="detail-wrapper">
+            <table class="student-details">
+                {% for detail in data.detail_data %}
+                <tr>
+                    <td class="label">First Name</td>
+                    <td class="value">{{ detail.first_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Second Name</td>
+                    <td class="value">{{ detail.second_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Age</td>
+                    <td class="value">{{ detail.age }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Gender</td>
+                    <td class="value">{{ detail.gender }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Email</td>
+                    <td class="value">{{ detail.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label">School Name</td>
+                    <td class="value">{{ detail.school_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Address</td>
+                    <td class="value">{{ detail.addr }}</td>
+                </tr>
+                <tr>
+                    <td class="label">City</td>
+                    <td class="value">{{ detail.city }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Zip</td>
+                    <td class="value">{{ detail.zip }}</td>
+                </tr>
+                <tr>
+                    <td class="label">SEL</td>
+                    <td class="value">{{ detail.sel }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Tran Date</td>
+                    <td class="value">{{ detail.tran_date }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Eff Date</td>
+                    <td class="value">{{ detail.eff_date }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Code</td>
+                    <td class="value">{{ detail.code }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Description</td>
+                    <td class="value">{{ detail.description }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Loc</td>
+                    <td class="value">{{ detail.loc }}</td>
+                </tr>
+                {% endfor %}
             </table>
         </div>
     </div>
@@ -135,6 +157,33 @@
         }
         .transaction-table th {
             border-bottom: 1px solid #00ff00;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        .detail-wrapper {
+            padding: 20px;
+            border: 1px solid #000; /* Black border, normal background */
+        }
+        .student-details {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .student-details tr {
+            border: 1px solid #000; /* Solid black border around each row */
+        }
+        .student-details .label {
+            width: 30%; /* Adjust width as needed */
+            padding: 5px;
+            text-align: left;
+            font-weight: bold;
+            border-right: 1px solid #000; /* Vertical black border between label and value */
+        }
+        .student-details .value {
+            width: 80%;
+            padding: 5px;
+            text-align: center;
         }
     </style>
 {% endblock %}
