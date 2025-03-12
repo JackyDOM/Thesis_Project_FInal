@@ -19,7 +19,6 @@
                             <th>School Name</th>
                             <th>Address</th>
                             <th>City</th>
-                            <th>Zip</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -35,7 +34,6 @@
                             <td>{{ row["school_name"] }}</td>
                             <td>{{ row["addr"] }}</td>
                             <td>{{ row["city"] }}</td>
-                            <td>{{ row["zip"] }}</td>
                             <td>
                                 <form action="{{ url_for('edit') }}" method="POST" style="display: inline;">
                                     <input type="hidden" name="id" value="{{ row['rowid'] }}">
