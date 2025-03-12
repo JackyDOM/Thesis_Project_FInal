@@ -23,7 +23,7 @@
                     <tr>
                         <th>Sel</th>
                         <th>Tran Date</th>
-                        <th>Eff Date</th>
+                        <th>Time</th>
                         <th>Code</th>
                         <th>Description</th>
                         <th>Loc</th>
@@ -35,7 +35,7 @@
                             {% if loop.first %}
                                 <td>{{ tran.sel }}</td>
                                 <td>{{ tran.tran_date }}</td>
-                                <td>{{ tran.eff_date }}</td>
+                                <td>{{ tran.time }}</td>
                                 <td>{{ tran.code }}</td>
                                 <td>{{ tran.description }}</td>
                                 <td>{{ tran.loc }}</td>
@@ -108,8 +108,8 @@
                     <td class="value">{{ detail.tran_date }}</td>
                 </tr>
                 <tr>
-                    <td class="label">Eff Date</td>
-                    <td class="value">{{ detail.eff_date }}</td>
+                    <td class="label">Time</td>
+                    <td class="value">{{ detail.time }}</td>
                 </tr>
                 <tr>
                     <td class="label">Code</td>

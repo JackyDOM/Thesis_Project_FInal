@@ -37,7 +37,7 @@ def init_db():
                 policy_id TEXT,
                 sel TEXT,
                 tran_date TEXT,
-                eff_date TEXT,
+                time TEXT,
                 code TEXT,
                 description TEXT,
                 loc TEXT
@@ -107,18 +107,20 @@ def addrec():
                 policy_id_str = f"POL{policy_id:05d}"
 
                 submission_date = datetime.now().strftime("%d/%m/%Y")
+                submission_time = datetime.now().strftime("%H:%M:%S")
                 
                 def generate_random_sel():
                     return f"{random.randint(10000, 99999):05d}"
 
                 def generate_random_code():
                     return f"B{random.randint(100, 999)}"
+                
 
                 transactions = [
                     {
                         "sel": generate_random_sel(),
                         "tran_date": submission_date,
-                        "eff_date": submission_date,
+                        "time": submission_time,
                         "code": generate_random_code(),
                         "description": f"Student Registration - {first_name} {second_name}",
                         "loc": "P"
@@ -126,7 +128,7 @@ def addrec():
                     {
                         "sel": generate_random_sel(),
                         "tran_date": submission_date,
-                        "eff_date": submission_date,
+                        "time": submission_time,
                         "code": generate_random_code(),
                         "description": f"School Name - {school_name}",
                         "loc": "P"
@@ -134,9 +136,9 @@ def addrec():
                 ]
                 for tran in transactions:
                     cur.execute("""
-                        INSERT INTO transactions (policy_id, sel, tran_date, eff_date, code, description, loc)
+                        INSERT INTO transactions (policy_id, sel, tran_date, time, code, description, loc)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (policy_id_str, tran["sel"], tran["tran_date"], tran["eff_date"], tran["code"], tran["description"], tran["loc"]))
+                    """, (policy_id_str, tran["sel"], tran["tran_date"], tran["time"], tran["code"], tran["description"], tran["loc"]))
                 con.commit()
 
             file_path = os.path.join(app.static_folder, 'students.xlsx')
@@ -162,7 +164,7 @@ def addrec():
                     "city": city,
                     "sel": transactions[0]["sel"],
                     "tran_date": transactions[0]["tran_date"],
-                    "eff_date": transactions[0]["eff_date"],
+                    "time": transactions[0]["time"],
                     "code": transactions[0]["code"],
                     "description": transactions[0]["description"],
                     "loc": transactions[0]["loc"]
@@ -201,8 +203,8 @@ def run():
                 return render_template('result.html', data={"error": "Student not found"})
 
             policy_id = f"POL{int(rowid):05d}"
-            cur.execute("SELECT sel, tran_date, eff_date, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
-            transactions = [{"sel": row[0], "tran_date": row[1], "eff_date": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
+            cur.execute("SELECT sel, tran_date, time, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
+            transactions = [{"sel": row[0], "tran_date": row[1], "time": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
             if not transactions:
                 transactions = []
 
@@ -218,7 +220,7 @@ def run():
                     "city": student["city"],
                     "sel": transactions[0]["sel"],
                     "tran_date": transactions[0]["tran_date"],
-                    "eff_date": transactions[0]["eff_date"],
+                    "time": transactions[0]["time"],
                     "code": transactions[0]["code"],
                     "description": transactions[0]["description"],
                     "loc": transactions[0]["loc"]

@@ -4,7 +4,7 @@
 {% endblock %}
 {% block content %}
     <div class="container">
-        <h1>Edit Student Record</h1>
+        <h1>Edit Test-Case Student Record</h1>
         {% for row in rows %}
         <form action="{{ url_for('editrec') }}" method="POST" class="student-form">
             <h3>Student ID: {{ row['rowid'] }}</h3>
