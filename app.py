@@ -57,7 +57,7 @@ def enternew():
 def addrec():
     if request.method == 'POST':
         try:
-            # Get data from the form (removed zip)
+            # Get data from the form
             first_name = request.form['first_name']
             second_name = request.form['second_name']
             age = request.form['age']
@@ -67,12 +67,11 @@ def addrec():
             addr = request.form['add']
             city = request.form['city']
 
-            # Define a function to check for special characters
+            # Validation code (unchanged)
             def has_special_characters(text):
                 pattern = r'^[a-zA-Z0-9\s.,-]+$'
                 return not bool(re.match(pattern, text))
 
-            # Check fields that shouldn't have special characters
             fields_to_check = {
                 'First Name': first_name,
                 'Second Name': second_name,
@@ -80,17 +79,16 @@ def addrec():
                 'Address': addr,
                 'City': city
             }
-            
             for field_name, value in fields_to_check.items():
                 if has_special_characters(value):
                     msg = f"No special characters allowed in {field_name}"
                     return render_template('result.html', data={"error": msg})
 
-            # Validate email
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if not re.match(email_pattern, email):
                 return render_template('result.html', data={"error": "Invalid email format"})
 
+            # Insert into database (unchanged)
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("""
@@ -110,7 +108,6 @@ def addrec():
                 def generate_random_code():
                     return f"B{random.randint(100, 999)}"
                 
-
                 transactions = [
                     {
                         "sel": generate_random_sel(),
@@ -136,15 +133,21 @@ def addrec():
                     """, (policy_id_str, tran["sel"], tran["tran_date"], tran["time"], tran["code"], tran["description"], tran["loc"]))
                 con.commit()
 
+            # Update students.xlsx with only one row per student
             file_path = os.path.join(app.static_folder, 'students.xlsx')
             if not os.path.exists(file_path):
                 wb = Workbook()
                 ws = wb.active
-                ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City'])
+                ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 
+                           'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
             else:
                 wb = openpyxl.load_workbook(file_path)
                 ws = wb.active
-            ws.append([first_name, second_name, age, gender, email, school_name, addr, city])
+
+            # Write only one row, using the first transaction's data and school_name as description
+            tran = transactions[0]  # Use the first transaction
+            ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
+                       tran["sel"], tran["tran_date"], tran["time"], tran["code"], school_name, tran["loc"]])
             wb.save(file_path)
 
             detail_data = [
@@ -284,28 +287,34 @@ def editrec():
                         school_name = ?, addr = ?, city = ?
                     WHERE rowid = ?
                 """, (first_name, second_name, age, gender, email, school_name, addr, city, rowid))
+                policy_id = f"POL{int(rowid):05d}"
+                # Fetch existing transactions for this student
+                cur.execute("SELECT sel, tran_date, time, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
+                transactions = [{"sel": row[0], "tran_date": row[1], "time": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
                 con.commit()
 
-                # Fetch all students to update the Excel file
-                cur.execute("SELECT first_name, second_name, age, gender, email, school_name, addr, city FROM students")
-                rows = cur.fetchall()
-
-            # Update the Excel file
+            # Update students.xlsx with only one row per student
             file_path = os.path.join(app.static_folder, 'students.xlsx')
-            if os.path.exists(file_path):
-                wb = openpyxl.load_workbook(file_path)
-                ws = wb.active
-                # Clear the existing content (except the header)
-                ws.delete_rows(2, ws.max_row)
-            else:
-                wb = Workbook()
-                ws = wb.active
-                ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City'])
+            wb = openpyxl.load_workbook(file_path)
+            ws = wb.active
 
-            # Rewrite all rows from the database
-            for row in rows:
+            # Remove old rows for this student (match by name as a simple approach)
+            rows_to_keep = []
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[0] != first_name or row[1] != second_name:
+                    rows_to_keep.append(row)
+
+            # Rewrite the Excel file
+            ws.delete_rows(1, ws.max_row)  # Clear all rows
+            ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 
+                       'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
+            for row in rows_to_keep:
                 ws.append(row)
 
+            # Add updated student data with one row, using the first transaction
+            tran = transactions[0]  # Use the first transaction
+            ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
+                       tran["sel"], tran["tran_date"], tran["time"], tran["code"], school_name, tran["loc"]])
             wb.save(file_path)
 
             msg = "Record successfully edited in the database and Excel file"
@@ -326,34 +335,42 @@ def delete():
     if request.method == 'POST':
         try:
             rowid = request.form['id']
-            file_path = os.path.join(app.static_folder, 'students.xlsx')
             policy_id = f"POL{int(rowid):05d}"
+            file_path = os.path.join(app.static_folder, 'students.xlsx')
 
+            # Delete from database
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("DELETE FROM students WHERE rowid=?", (rowid,))
                 cur.execute("DELETE FROM transactions WHERE policy_id=?", (policy_id,))
                 con.commit()
 
-                cur.execute("SELECT * FROM students")
-                rows = cur.fetchall()
+                # Fetch remaining students and their transactions
+                cur.execute("SELECT first_name, second_name, age, gender, email, school_name, addr, city, rowid FROM students")
+                students = cur.fetchall()
 
+            # Rewrite students.xlsx with one row per student
             wb = Workbook()
             ws = wb.active
-            ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City'])
-            for row in rows:
-                ws.append(row)
+            ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 
+                       'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
+
+            for student in students:
+                first_name, second_name, age, gender, email, school_name, addr, city, student_rowid = student
+                student_policy_id = f"POL{student_rowid:05d}"
+                cur.execute("SELECT sel, tran_date, time, code, description, loc FROM transactions WHERE policy_id = ?", (student_policy_id,))
+                transactions = cur.fetchall()
+                tran = transactions[0]  # Use the first transaction
+                ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
+                           tran[0], tran[1], tran[2], tran[3], school_name, tran[5]])  # Use school_name as description
+
             wb.save(file_path)
 
-            data = {
-                "message": "Record successfully deleted from the database and Excel file"
-            }
+            data = {"message": "Record successfully deleted from the database and Excel file"}
         except Exception as e:
             if 'con' in locals():
                 con.rollback()
-            data = {
-                "error": f"Error in the DELETE: {str(e)}"
-            }
+            data = {"error": f"Error in the DELETE: {str(e)}"}
         finally:
             if 'con' in locals():
                 con.close()
