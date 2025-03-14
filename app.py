@@ -275,6 +275,7 @@ def editrec():
             addr = request.form['add']
             city = request.form['city']
 
+            # Update the database
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("""
@@ -284,15 +285,40 @@ def editrec():
                     WHERE rowid = ?
                 """, (first_name, second_name, age, gender, email, school_name, addr, city, rowid))
                 con.commit()
-                msg = "Record successfully edited in the database"
-                data = {"message": msg}
+
+                # Fetch all students to update the Excel file
+                cur.execute("SELECT first_name, second_name, age, gender, email, school_name, addr, city FROM students")
+                rows = cur.fetchall()
+
+            # Update the Excel file
+            file_path = os.path.join(app.static_folder, 'students.xlsx')
+            if os.path.exists(file_path):
+                wb = openpyxl.load_workbook(file_path)
+                ws = wb.active
+                # Clear the existing content (except the header)
+                ws.delete_rows(2, ws.max_row)
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City'])
+
+            # Rewrite all rows from the database
+            for row in rows:
+                ws.append(row)
+
+            wb.save(file_path)
+
+            msg = "Record successfully edited in the database and Excel file"
+            data = {"message": msg}
 
         except Exception as e:
-            con.rollback()
+            if 'con' in locals():
+                con.rollback()
             msg = f"Error in the Edit: {str(e)}"
             data = {"error": msg}
         finally:
-            con.close()
+            if 'con' in locals():
+                con.close()
             return render_template('result.html', data=data)
 
 @app.route("/delete", methods=['POST', 'GET'])
