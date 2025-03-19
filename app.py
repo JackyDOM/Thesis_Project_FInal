@@ -6,10 +6,20 @@ from openpyxl import Workbook
 import openpyxl
 import os
 import random
+import uuid
 import string
 import re
 
 app = Flask(__name__)
+
+# Register the basename filter
+from os.path import basename
+app.jinja_env.filters['basename'] = basename
+
+# Ensure an 'uploads' directory exists
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # Initialize the database (create table if it doesn’t exist)
 def init_db():
@@ -376,5 +386,54 @@ def delete():
                 con.close()
             return render_template('result.html', data=data)
 
+@app.route("/upload", methods=["GET", "POST"], endpoint="upload")
+def upload_file():
+    if request.method == "POST":
+        try:
+            # Check if a file is uploaded
+            if "file" not in request.files:
+                return render_template("upload.html", error="No file uploaded")
+            
+            file = request.files["file"]
+            
+            # Check if the file is empty or not an .xlsx file
+            if file.filename == "":
+                return render_template("upload.html", error="No file selected")
+            if not file.filename.lower().endswith(".xlsx"):
+                return render_template("upload.html", error="Only .xlsx files are allowed!")
+            
+            # Generate a unique filename
+            unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+            upload_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+            file.save(upload_path)
+            
+            # Render upload.html with file details
+            return render_template("upload.html", filename=file.filename, file_path=upload_path, message="File uploaded successfully!")
+        
+        except Exception as e:
+            return render_template("upload.html", error=f"Error uploading file: {str(e)}")
+    
+    # For GET request, render the upload form
+    return render_template("upload.html")
+
+@app.route("/delete_uploaded", methods=["POST"])
+def delete_uploaded():
+    try:
+        file_path = request.form.get("file_path")
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+            return render_template("upload.html", message="File deleted successfully")
+        else:
+            return render_template("upload.html", error="File not found")
+    except Exception as e:
+        return render_template("upload.html", error=f"Error deleting file: {str(e)}")
+
+@app.route("/serve_uploaded_file/<path:file_path>")
+def serve_uploaded_file(file_path):
+    full_path = os.path.join(UPLOAD_FOLDER, file_path)
+    if os.path.exists(full_path):
+        return send_file(full_path, as_attachment=False)  # Opens in browser if supported, or downloads
+    else:
+        return render_template("upload.html", error="File not found")
 if __name__ == "__main__":
     app.run(debug=True)
