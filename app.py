@@ -386,6 +386,8 @@ def delete():
                 con.close()
             return render_template('result.html', data=data)
 
+
+# when user upload file and click on submit so it go to displayverify.html file
 @app.route("/upload", methods=["GET", "POST"], endpoint="upload")
 def upload_file():
     if request.method == "POST":
@@ -416,24 +418,36 @@ def upload_file():
     # For GET request, render the upload form
     return render_template("upload.html")
 
-@app.route("/delete_uploaded", methods=["POST"])
-def delete_uploaded():
-    try:
-        file_path = request.form.get("file_path")
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
-            return render_template("upload.html", message="File deleted successfully")
-        else:
-            return render_template("upload.html", error="File not found")
-    except Exception as e:
-        return render_template("upload.html", error=f"Error deleting file: {str(e)}")
+# @app.route("/delete_uploaded", methods=["POST"])
+# def delete_uploaded():
+#     try:
+#         file_path = request.form.get("file_path")
+#         if file_path and os.path.exists(file_path):
+#             os.remove(file_path)
+#             return render_template("upload.html", message="File deleted successfully")
+#         else:
+#             return render_template("upload.html", error="File not found")
+#     except Exception as e:
+#         return render_template("upload.html", error=f"Error deleting file: {str(e)}")
 
-@app.route("/serve_uploaded_file/<path:file_path>")
-def serve_uploaded_file(file_path):
-    full_path = os.path.join(UPLOAD_FOLDER, file_path)
-    if os.path.exists(full_path):
-        return send_file(full_path, as_attachment=False)  # Opens in browser if supported, or downloads
-    else:
-        return render_template("upload.html", error="File not found")
+# @app.route("/serve_uploaded_file/<path:file_path>")
+# def serve_uploaded_file(file_path):
+#     full_path = os.path.join(UPLOAD_FOLDER, file_path)
+#     if os.path.exists(full_path):
+#         return send_file(full_path, as_attachment=False)  # Opens in browser if supported, or downloads
+#     else:
+#         return render_template("upload.html", error="File not found")
+    
+
+# for verify data when user submit the file xlsx
+# @app.route("/verify")
+# def verify():
+#     return render_template("verifyResult.html")
+
+# for route Result
+@app.route("/displayResult")
+def displayResult():
+    return render_template("displayResult.html")
+
 if __name__ == "__main__":
     app.run(debug=True)

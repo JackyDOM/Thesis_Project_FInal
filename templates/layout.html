@@ -13,6 +13,7 @@
             <a href="{{ url_for('enternew') }}" class="navbar-item {% if request.path == url_for('enternew') %}active{% endif %}">Add Student</a>
             <a href="{{ url_for('list') }}" class="navbar-item {% if request.path == url_for('list') %}active{% endif %}">Manage Students</a>
             <a href="{{ url_for('upload') }}" class="navbar-item {% if request.path == url_for('upload') %}active{% endif %}">Upload File</a>
+            <a href="{{ url_for('displayResult') }}" class="navbar-item {% if request.path == url_for('displayResult') %}active{% endif %}">Result</a>
         </div>
     </nav>
 
