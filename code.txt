@@ -161,3 +161,30 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+# @app.route("/delete_uploaded", methods=["POST"])
+# def delete_uploaded():
+#     try:
+#         file_path = request.form.get("file_path")
+#         if file_path and os.path.exists(file_path):
+#             os.remove(file_path)
+#             return render_template("upload.html", message="File deleted successfully")
+#         else:
+#             return render_template("upload.html", error="File not found")
+#     except Exception as e:
+#         return render_template("upload.html", error=f"Error deleting file: {str(e)}")
+
+# @app.route("/serve_uploaded_file/<path:file_path>")
+# def serve_uploaded_file(file_path):
+#     full_path = os.path.join(UPLOAD_FOLDER, file_path)
+#     if os.path.exists(full_path):
+#         return send_file(full_path, as_attachment=False)  # Opens in browser if supported, or downloads
+#     else:
+#         return render_template("upload.html", error="File not found")
+    
+
+# for verify data when user submit the file xlsx
+# @app.route("/verify")
+# def verify():
+#     return render_template("verifyResult.html")

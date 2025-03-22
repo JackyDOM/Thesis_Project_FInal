@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, send_from_directory
 import sqlite3
 import pandas as pd
 from datetime import datetime
@@ -388,6 +388,8 @@ def delete():
 
 
 # when user upload file and click on submit so it go to displayverify.html file
+from flask import send_from_directory  # Add this to your imports at the top
+
 @app.route("/upload", methods=["GET", "POST"], endpoint="upload")
 def upload_file():
     if request.method == "POST":
@@ -404,45 +406,126 @@ def upload_file():
             if not file.filename.lower().endswith(".xlsx"):
                 return render_template("upload.html", error="Only .xlsx files are allowed!")
             
-            # Generate a unique filename
+            # Generate a unique filename and save the file
             unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
             upload_path = os.path.join(UPLOAD_FOLDER, unique_filename)
             file.save(upload_path)
             
-            # Render upload.html with file details
-            return render_template("upload.html", filename=file.filename, file_path=upload_path, message="File uploaded successfully!")
+            # Read the uploaded Excel file
+            df_uploaded = pd.read_excel(upload_path)
+            
+            # Get data from SQLite (only students table)
+            with sqlite3.connect("database.db") as con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute("""
+                    SELECT first_name, second_name, age, gender, email, 
+                           school_name, addr, city
+                    FROM students
+                """)
+                db_rows = cur.fetchall()
+            
+            # Convert SQLite data to DataFrame for easier comparison
+            db_df = pd.DataFrame(db_rows, columns=[
+                'First Name', 'Second Name', 'Age', 'Gender', 'Email', 
+                'School Name', 'Address', 'City'
+            ])
+            
+            # Prepare comparison results
+            comparison_results = []
+            
+            # Define columns to compare (only those in students table)
+            student_columns = [
+                'First Name', 'Second Name', 'Age', 'Gender', 'Email',
+                'School Name', 'Address', 'City'
+            ]
+            
+            # Check if uploaded file has at least the student columns
+            if not all(col in df_uploaded.columns for col in student_columns):
+                return render_template("upload.html", 
+                                     error="Uploaded file is missing required student columns")
+            
+            # Normalize dataframes (strip strings, handle NaN)
+            for col in student_columns:
+                if df_uploaded[col].dtype == 'object':
+                    df_uploaded[col] = df_uploaded[col].astype(str).str.strip()
+                if db_df[col].dtype == 'object':
+                    db_df[col] = db_df[col].astype(str).str.strip()
+            
+            # Replace NaN with empty string for consistent comparison
+            df_uploaded = df_uploaded.fillna('')
+            db_df = db_df.fillna('')
+            
+            # Compare each row
+            for index, uploaded_row in df_uploaded.iterrows():
+                # Try to find matching record in database
+                matching_rows = db_df[
+                    (db_df['First Name'] == uploaded_row['First Name']) &
+                    (db_df['Second Name'] == uploaded_row['Second Name'])
+                ]
+                
+                # Include all columns from uploaded file in results, even if not compared
+                row_data = {
+                    'First Name': uploaded_row['First Name'],
+                    'Second Name': uploaded_row['Second Name'],
+                    'Age': uploaded_row['Age'],
+                    'Gender': uploaded_row['Gender'],
+                    'Email': uploaded_row['Email'],
+                    'School Name': uploaded_row['School Name'],
+                    'Address': uploaded_row['Address'],
+                    'City': uploaded_row['City'],
+                }
+                
+                # Add transaction columns if they exist in the uploaded file
+                for col in ['SEL', 'Tran Date', 'Time', 'Code', 'Description']:
+                    if col in df_uploaded.columns:
+                        row_data[col] = uploaded_row[col]
+                
+                if not matching_rows.empty:
+                    match_row = matching_rows.iloc[0]
+                    is_match = True
+                    # Compare only student-related columns
+                    print(f"\nComparing row {index}:")
+                    for col in student_columns:
+                        upload_val = str(uploaded_row[col])
+                        db_val = str(match_row[col])
+                        if upload_val != db_val:
+                            print(f"Mismatch in {col}: '{upload_val}' vs '{db_val}'")
+                            is_match = False
+                    row_data['Result'] = 'Pass' if is_match else 'Fail'
+                else:
+                    print(f"No match found for {uploaded_row['First Name']} {uploaded_row['Second Name']}")
+                    row_data['Result'] = 'Fail'
+                
+                comparison_results.append(row_data)
+            
+            # Generate Excel file with results
+            result_filename = f"verification_results_{uuid.uuid4().hex}.xlsx"
+            result_path = os.path.join(UPLOAD_FOLDER, result_filename)
+            result_df = pd.DataFrame(comparison_results)
+            result_df.to_excel(result_path, index=False)
+            
+            # Clean up: remove the temporary uploaded file
+            os.remove(upload_path)
+            
+            # Render the verification results with download link
+            return render_template("verifyResult.html", 
+                                results=comparison_results,
+                                message="Verification completed",
+                                download_file=result_filename)
         
         except Exception as e:
-            return render_template("upload.html", error=f"Error uploading file: {str(e)}")
+            return render_template("upload.html", 
+                                error=f"Error processing file: {str(e)}")
     
     # For GET request, render the upload form
     return render_template("upload.html")
 
-# @app.route("/delete_uploaded", methods=["POST"])
-# def delete_uploaded():
-#     try:
-#         file_path = request.form.get("file_path")
-#         if file_path and os.path.exists(file_path):
-#             os.remove(file_path)
-#             return render_template("upload.html", message="File deleted successfully")
-#         else:
-#             return render_template("upload.html", error="File not found")
-#     except Exception as e:
-#         return render_template("upload.html", error=f"Error deleting file: {str(e)}")
+# New route to serve the generated Excel file
+@app.route("/download/<filename>")
+def download_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
 
-# @app.route("/serve_uploaded_file/<path:file_path>")
-# def serve_uploaded_file(file_path):
-#     full_path = os.path.join(UPLOAD_FOLDER, file_path)
-#     if os.path.exists(full_path):
-#         return send_file(full_path, as_attachment=False)  # Opens in browser if supported, or downloads
-#     else:
-#         return render_template("upload.html", error="File not found")
-    
-
-# for verify data when user submit the file xlsx
-# @app.route("/verify")
-# def verify():
-#     return render_template("verifyResult.html")
 
 # for route Result
 @app.route("/displayResult")

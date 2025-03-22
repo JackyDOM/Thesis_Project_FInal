@@ -20,22 +20,10 @@
         {% endif %}
     </div>
 
-    {% if filename and file_path %}
-    <div class="file-container">
-        <p class="success">File uploaded successfully!</p>
-        <div class="file-item">
-            <a href="{{ url_for('serve_uploaded_file', file_path=file_path|basename) }}" class="file-link" target="_blank">{{ filename }}</a>
-            <form action="{{ url_for('delete_uploaded') }}" method="POST" style="display: inline;">
-                <input type="hidden" name="file_path" value="{{ file_path }}">
-                <button type="submit" class="delete-btn">Delete</button>
-            </form>
-        </div>
-    </div>
-    {% endif %}
-
     <div id="toast" class="toast"></div>
 
     <style>
+        /* [Keeping all existing styles, just removed .file-container, .file-item, .file-link, and .delete-btn styles] */
         .container {
             text-align: center;
             background-color: #fff;
@@ -95,38 +83,6 @@
             font-size: 18px;
             margin: 10px 0;
         }
-        .file-container {
-            text-align: center;
-            margin: 20px auto;
-            max-width: 500px;
-        }
-        .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-        .file-link {
-            font-size: 16px;
-            color: #2196F3;
-            text-decoration: underline;
-            cursor: pointer;
-        }
-        .file-link:hover {
-            color: #1976D2;
-        }
-        .delete-btn {
-            background-color: #f44336;
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .delete-btn:hover {
-            background-color: #d32f2f;
-        }
         .toast {
             display: none;
             position: fixed;
@@ -163,7 +119,3 @@
         }
     </script>
 {% endblock %}
-
-{% filter basename %}
-    {{ file_path }}
-{% endfilter %}
