@@ -403,12 +403,17 @@ def create_image_from_results(results):
     width = 2480  # 210 mm = 8.27 in × 300 DPI
     height = 3508  # 297 mm = 11.69 in × 300 DPI
     num_rows = len(results)
-    num_cols = len(results[0].keys())  # Number of columns (keys in each result dict)
-    font_size = 20  # Adjusted font size for A4 readability (smaller than 120 to fit)
-    line_height = 20  # Space per line, scaled for A4
-    header_height = 150  # Space for headers, scaled for A4
-    row_spacing = 30  # Additional spacing between rows, scaled for A4
-    wrap_width = 25  # Max characters per line for wrapping (adjusted for A4 width)
+    num_cols = len(results[0].keys())  # Number of columns
+    font_size = 40  # Adjust as needed
+    line_height = int(font_size * 1.5)  # Vertical spacing
+    header_height = int(font_size * 3)  # Header space
+    row_spacing = int(font_size * 2)  # Row spacing
+    margin_left = 50  # Left margin
+    column_width = (width - 2 * margin_left) // num_cols  # Dynamic column width
+    
+    # Estimate characters per line based on font size and column width
+    char_width = font_size * 0.6  # Approximate pixel width per character (adjust if needed)
+    wrap_width = int(column_width // char_width)  # Max characters per line to fit column
 
     # Create a blank image with white background (A4 size)
     img = Image.new('RGB', (width, height), color='white')
@@ -420,40 +425,43 @@ def create_image_from_results(results):
     except IOError:
         font = ImageFont.load_default()
     
-    y_position = 50  # Starting position with some margin from top
+    y_position = 50  # Starting position
     
-    # Add headers (one per column)
+    # Add headers
     headers = list(results[0].keys())
     for i, header in enumerate(headers):
-        x_position = 50 + i * (width // num_cols)  # Margin from left, spread evenly
+        x_position = margin_left + i * column_width
         d.text((x_position, y_position), header, font=font, fill="black")
     y_position += header_height
     
-    # Add each result row with increased spacing
+    # Add result rows
     for row_idx, row in enumerate(results):
+        max_lines_in_row = 1
         for i, (key, value) in enumerate(row.items()):
-            x_position = 50 + i * (width // num_cols)  # Margin from left, spread evenly
-            if key in ['Address', 'City', 'Email', 'School Name'] and len(str(value)) > wrap_width:
-                # Wrap long text into 2 lines
-                wrapped_text = textwrap.fill(str(value), width=wrap_width)
+            x_position = margin_left + i * column_width
+            text_to_draw = str(value)
+            if key in ['Address', 'City', 'Email', 'School Name'] and len(text_to_draw) > wrap_width:
+                # Wrap long text to fit column
+                wrapped_text = textwrap.fill(text_to_draw, width=wrap_width)
                 lines = wrapped_text.split('\n')
-                for j, line in enumerate(lines[:3]):  # Limit to 2 lines
-                    d.text((x_position, y_position + j * line_height), line, font=font, fill="black")
+                for j, line in enumerate(lines[:5]):  # Limit to 5 lines (adjustable)
+                    # Use max_width to prevent overflow (Pillow 9.2.0+)
+                    d.text((x_position, y_position + j * line_height), line, font=font, fill="black", max_width=column_width)
+                max_lines_in_row = max(max_lines_in_row, min(len(lines), 5))
             else:
-                # Single line for other fields
-                d.text((x_position, y_position), str(value), font=font, fill="black")
-        # Move y_position down based on max lines in this row plus row spacing
-        row_lines = sum(1 if key not in ['Address', 'City', 'Email', 'School Name'] else 3 for key in row.keys())
-        y_position += row_lines * line_height
-        if row_idx < num_rows - 1:  # Add row spacing except after the last row
+                d.text((x_position, y_position), text_to_draw, font=font, fill="black", max_width=column_width)
+                max_lines_in_row = max(max_lines_in_row, 1)
+        
+        # Adjust y_position
+        y_position += max_lines_in_row * line_height
+        if row_idx < num_rows - 1:
             y_position += row_spacing
     
-    # Check if content fits within A4 height (optional: truncate or warn if it doesn’t)
+    # Check height
     if y_position > height:
         print(f"Warning: Content exceeds A4 height ({height}px). Current height: {y_position}px")
-        # Optionally, you could resize the image or truncate content here
     
-    # Save the image to a file
+    # Save image
     image_path = os.path.join(STATIC_IMAGES_FOLDER, f"{uuid.uuid4().hex}.png")
     img.save(image_path)
 
