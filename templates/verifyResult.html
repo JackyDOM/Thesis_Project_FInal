@@ -1,108 +1,39 @@
 {% extends "layout.html" %}
 {% block title %}
-    Verification Results
+    Transaction Result
 {% endblock %}
 {% block content %}
-    <div class="container">
-        <h2>Verification Results</h2>
-        
-        {% if message %}
-            <p class="success">{{ message }}</p>
-        {% endif %}
-        
-        {% if results %}
-            <table class="results-table">
-                <thead>
-                    <tr>
-                        {% for key in results[0].keys() %}
-                            <th>{{ key }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in results %}
-                        <tr class="{{ 'pass' if row['Result'] == 'Pass' else 'fail' }}">
-                            {% for key in row.keys() %}
-                                <td>{{ row[key] }}</td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            
-            {% if download_file %}
-                <a href="{{ url_for('download_file', filename=download_file) }}" class="download-btn">
-                    Download Results (.xlsx)
-                </a>
-            {% endif %}
-        {% else %}
-            <p>No results to display</p>
-        {% endif %}
-        
-        <button onclick="window.location.href='{{ url_for('upload') }}'">Upload Another File</button>
-    </div>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification Results</title>
     <style>
+        img {
+            max-width: 100%; /* Ensure it fits the container */
+            height: auto;    /* Maintain aspect ratio */
+        }
         .container {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-Refactor this code        .success {
-            color: #4CAF50;
-            margin-bottom: 15px;
-        }
-        .results-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        .results-table th, .results-table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        .results-table th {
-            background-color: #f5f5f5;
-            font-weight: bold;
-        }
-        .pass {
-            background-color: #e6ffe6;
-        }
-        .fail {
-            background-color: #ffe6e6;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .download-btn {
-            display: inline-block;
-            background-color: #2196F3;
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-top: 10px;
-            margin-right: 10px;
-        }
-        .download-btn:hover {
-            background-color: #1976D2;
+            overflow-x: auto; /* Allow horizontal scrolling if needed */
         }
     </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{{ message }}</h1>
+        <!-- {% if results %}
+            <h2>Results:</h2>
+            <ul>
+                {% for result in results %}
+                    <li>{{ result }}</li>
+                {% endfor %}
+            </ul> -->
+            <h2>Generated Image:</h2>
+            <img src="/{{ image_path }}" alt="Verification Results">
+        {% endif %}
+    </div>
+</body>
+</html>
 {% endblock %}

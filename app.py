@@ -21,6 +21,11 @@ UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# Ensure 'static/images' directory exists
+STATIC_IMAGES_FOLDER = os.path.join('static', 'images')
+if not os.path.exists(STATIC_IMAGES_FOLDER):
+    os.makedirs(STATIC_IMAGES_FOLDER)
+
 # Initialize the database (create table if it doesn’t exist)
 def init_db():
     with sqlite3.connect('database.db') as con:
@@ -248,8 +253,8 @@ def run():
     except Exception as e:
         return render_template('result.html', data={"error": f"Error in RUN: {str(e)}"})
 
-@app.route('/list')
-def list():
+@app.route('/student_list')
+def student_list():
     con = sqlite3.connect("database.db")
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -388,138 +393,148 @@ def delete():
 
 
 # when user upload file and click on submit so it go to displayverify.html file
-from flask import send_from_directory  # Add this to your imports at the top
+from PIL import Image, ImageDraw, ImageFont
+import os
+import uuid
+import textwrap
+
+def create_image_from_results(results):
+    # A4 dimensions at 300 DPI (print quality)
+    width = 2480  # 210 mm = 8.27 in × 300 DPI
+    height = 3508  # 297 mm = 11.69 in × 300 DPI
+    num_rows = len(results)
+    num_cols = len(results[0].keys())  # Number of columns (keys in each result dict)
+    font_size = 20  # Adjusted font size for A4 readability (smaller than 120 to fit)
+    line_height = 20  # Space per line, scaled for A4
+    header_height = 150  # Space for headers, scaled for A4
+    row_spacing = 30  # Additional spacing between rows, scaled for A4
+    wrap_width = 25  # Max characters per line for wrapping (adjusted for A4 width)
+
+    # Create a blank image with white background (A4 size)
+    img = Image.new('RGB', (width, height), color='white')
+    d = ImageDraw.Draw(img)
+    
+    # Use a basic font
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+    
+    y_position = 50  # Starting position with some margin from top
+    
+    # Add headers (one per column)
+    headers = list(results[0].keys())
+    for i, header in enumerate(headers):
+        x_position = 50 + i * (width // num_cols)  # Margin from left, spread evenly
+        d.text((x_position, y_position), header, font=font, fill="black")
+    y_position += header_height
+    
+    # Add each result row with increased spacing
+    for row_idx, row in enumerate(results):
+        for i, (key, value) in enumerate(row.items()):
+            x_position = 50 + i * (width // num_cols)  # Margin from left, spread evenly
+            if key in ['Address', 'City', 'Email', 'School Name'] and len(str(value)) > wrap_width:
+                # Wrap long text into 2 lines
+                wrapped_text = textwrap.fill(str(value), width=wrap_width)
+                lines = wrapped_text.split('\n')
+                for j, line in enumerate(lines[:3]):  # Limit to 2 lines
+                    d.text((x_position, y_position + j * line_height), line, font=font, fill="black")
+            else:
+                # Single line for other fields
+                d.text((x_position, y_position), str(value), font=font, fill="black")
+        # Move y_position down based on max lines in this row plus row spacing
+        row_lines = sum(1 if key not in ['Address', 'City', 'Email', 'School Name'] else 3 for key in row.keys())
+        y_position += row_lines * line_height
+        if row_idx < num_rows - 1:  # Add row spacing except after the last row
+            y_position += row_spacing
+    
+    # Check if content fits within A4 height (optional: truncate or warn if it doesn’t)
+    if y_position > height:
+        print(f"Warning: Content exceeds A4 height ({height}px). Current height: {y_position}px")
+        # Optionally, you could resize the image or truncate content here
+    
+    # Save the image to a file
+    image_path = os.path.join(STATIC_IMAGES_FOLDER, f"{uuid.uuid4().hex}.png")
+    img.save(image_path)
+
+    return image_path
+
 
 @app.route("/upload", methods=["GET", "POST"], endpoint="upload")
 def upload_file():
     if request.method == "POST":
         try:
-            # Check if a file is uploaded
             if "file" not in request.files:
                 return render_template("upload.html", error="No file uploaded")
             
             file = request.files["file"]
-            
-            # Check if the file is empty or not an .xlsx file
             if file.filename == "":
                 return render_template("upload.html", error="No file selected")
             if not file.filename.lower().endswith(".xlsx"):
                 return render_template("upload.html", error="Only .xlsx files are allowed!")
             
-            # Generate a unique filename and save the file
+            # Save the uploaded file
             unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
             upload_path = os.path.join(UPLOAD_FOLDER, unique_filename)
             file.save(upload_path)
             
-            # Read the uploaded Excel file
+            # Process the file
             df_uploaded = pd.read_excel(upload_path)
             
-            # Get data from SQLite (only students table)
+            # Fetch data from the database
             with sqlite3.connect("database.db") as con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
-                cur.execute("""
-                    SELECT first_name, second_name, age, gender, email, 
-                           school_name, addr, city
-                    FROM students
-                """)
+                cur.execute("""SELECT first_name, second_name, age, gender, email, 
+                               school_name, addr, city FROM students""")
                 db_rows = cur.fetchall()
             
-            # Convert SQLite data to DataFrame for easier comparison
             db_df = pd.DataFrame(db_rows, columns=[
-                'First Name', 'Second Name', 'Age', 'Gender', 'Email', 
+                'First Name', 'Second Name', 'Age', 'Gender', 'Email',
                 'School Name', 'Address', 'City'
             ])
             
             # Prepare comparison results
             comparison_results = []
+            student_columns = ['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City']
             
-            # Define columns to compare (only those in students table)
-            student_columns = [
-                'First Name', 'Second Name', 'Age', 'Gender', 'Email',
-                'School Name', 'Address', 'City'
-            ]
-            
-            # Check if uploaded file has at least the student columns
-            if not all(col in df_uploaded.columns for col in student_columns):
-                return render_template("upload.html", 
-                                     error="Uploaded file is missing required student columns")
-            
-            # Normalize dataframes (strip strings, handle NaN)
-            for col in student_columns:
-                if df_uploaded[col].dtype == 'object':
-                    df_uploaded[col] = df_uploaded[col].astype(str).str.strip()
-                if db_df[col].dtype == 'object':
-                    db_df[col] = db_df[col].astype(str).str.strip()
-            
-            # Replace NaN with empty string for consistent comparison
-            df_uploaded = df_uploaded.fillna('')
-            db_df = db_df.fillna('')
-            
-            # Compare each row
+            # Compare the data
             for index, uploaded_row in df_uploaded.iterrows():
-                # Try to find matching record in database
                 matching_rows = db_df[
                     (db_df['First Name'] == uploaded_row['First Name']) &
                     (db_df['Second Name'] == uploaded_row['Second Name'])
                 ]
                 
-                # Include all columns from uploaded file in results, even if not compared
-                row_data = {
-                    'First Name': uploaded_row['First Name'],
-                    'Second Name': uploaded_row['Second Name'],
-                    'Age': uploaded_row['Age'],
-                    'Gender': uploaded_row['Gender'],
-                    'Email': uploaded_row['Email'],
-                    'School Name': uploaded_row['School Name'],
-                    'Address': uploaded_row['Address'],
-                    'City': uploaded_row['City'],
-                }
-                
-                # Add transaction columns if they exist in the uploaded file
-                for col in ['SEL', 'Tran Date', 'Time', 'Code', 'Description']:
-                    if col in df_uploaded.columns:
-                        row_data[col] = uploaded_row[col]
+                row_data = {col: uploaded_row[col] for col in student_columns}
                 
                 if not matching_rows.empty:
                     match_row = matching_rows.iloc[0]
                     is_match = True
-                    # Compare only student-related columns
-                    print(f"\nComparing row {index}:")
                     for col in student_columns:
-                        upload_val = str(uploaded_row[col])
-                        db_val = str(match_row[col])
-                        if upload_val != db_val:
-                            print(f"Mismatch in {col}: '{upload_val}' vs '{db_val}'")
+                        if str(uploaded_row[col]) != str(match_row[col]):
                             is_match = False
                     row_data['Result'] = 'Pass' if is_match else 'Fail'
                 else:
-                    print(f"No match found for {uploaded_row['First Name']} {uploaded_row['Second Name']}")
                     row_data['Result'] = 'Fail'
                 
                 comparison_results.append(row_data)
             
-            # Generate Excel file with results
-            result_filename = f"verification_results_{uuid.uuid4().hex}.xlsx"
-            result_path = os.path.join(UPLOAD_FOLDER, result_filename)
-            result_df = pd.DataFrame(comparison_results)
-            result_df.to_excel(result_path, index=False)
+            # Generate image from results
+            image_path = create_image_from_results(comparison_results)
             
             # Clean up: remove the temporary uploaded file
             os.remove(upload_path)
             
-            # Render the verification results with download link
             return render_template("verifyResult.html", 
-                                results=comparison_results,
-                                message="Verification completed",
-                                download_file=result_filename)
+                                   results=comparison_results,
+                                   message="Verification completed",
+                                   image_path=image_path)
         
         except Exception as e:
-            return render_template("upload.html", 
-                                error=f"Error processing file: {str(e)}")
+            return render_template("upload.html", error=f"Error processing file: {str(e)}")
     
-    # For GET request, render the upload form
     return render_template("upload.html")
+
 
 # New route to serve the generated Excel file
 @app.route("/download/<filename>")
