@@ -409,3 +409,78 @@ while True:
 # Release resources
 cap.release()
 cv2.destroyAllWindows()
+
+
+
+============
+import easyocr
+import cv2
+import torch
+import random
+
+# Initialize EasyOCR reader
+reader = easyocr.Reader(['en'])
+
+# Initialize YOLOv5 model (Pre-trained)
+model = torch.hub.load('ultralytics/yolov5', 'yolov5n')  # Use 'yolov5s' for small model or 'yolov5m'/'yolov5l' for larger models
+
+# Read image
+img = cv2.imread('test.png')
+
+# Resize the image if it's too large
+scale_percent = 70  # Adjust this scale as needed
+width = int(img.shape[1] * scale_percent / 100)
+height = int(img.shape[0] * scale_percent / 100)
+img_resized = cv2.resize(img, (width, height))
+
+# Perform YOLOv5 object detection
+results = model(img_resized)
+
+# Get the detected bounding boxes for text-related objects (class 'text' is often identified by YOLO)
+# You can filter by class if your YOLOv5 model detects text objects
+text_bboxes = results.xywh[0]  # Bounding boxes, classes, and confidence scores
+
+# Check if YOLO detected anything
+print(f"Number of detections: {len(text_bboxes)}")
+
+# Draw YOLO detections (Object detection boxes)
+for bbox in text_bboxes:
+    x_center, y_center, w, h, conf, cls = bbox
+
+    if conf > 0.5:  # Threshold for confidence; adjust as needed
+        # Convert YOLO bounding box from center format to corner format
+        x1 = int((x_center - w / 2))
+        y1 = int((y_center - h / 2))
+        x2 = int((x_center + w / 2))
+        y2 = int((y_center + h / 2))
+        
+        # Generate a random color for the bounding box (RGB format)
+        color = [random.randint(0, 255) for _ in range(3)]  # Random color for each object
+        
+        # Draw bounding box for detected object (YOLO)
+        cv2.rectangle(img_resized, (x1, y1), (x2, y2), color, 2)  # Bounding box with random color
+        label = f"Object {int(cls)}"  # Label as object
+        cv2.putText(img_resized, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+# Perform text detection using EasyOCR (after YOLO detections)
+ocr_results = reader.readtext(img_resized)
+
+# Draw bounding boxes and labels for OCR text detection with different colors for each object
+for idx, (bbox, text, prob) in enumerate(ocr_results):
+    (x1_text, y1_text), (x2_text, y2_text), (x3_text, y3_text), (x4_text, y4_text) = bbox
+    x1_text, y1_text, x3_text, y3_text = int(x1_text), int(y1_text), int(x3_text), int(y3_text)
+
+    # Generate a random color for each OCR text bounding box
+    color = [random.randint(0, 255) for _ in range(3)]  # Random color for each bounding box
+
+    # Draw rectangle for OCR text bounding box (with random color)
+    cv2.rectangle(img_resized, (x1_text - 10, y1_text - 10), (x3_text + 10, y3_text + 10), color, 2)  # Random color for OCR
+
+    # Put text (the OCR result) inside the bounding box
+    cv2.putText(img_resized, text, (x1_text, y1_text - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+# Resize window to fit screen
+cv2.namedWindow('Image', cv2.WINDOW_NORMAL)  
+cv2.imshow('Image', img_resized)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
