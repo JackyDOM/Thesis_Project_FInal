@@ -325,3 +325,87 @@ def upload_file():
 @app.route("/download/<filename>")
 def download_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+
+
+
+============
+
+import cv2
+import torch
+
+# Load YOLOv5 model (pre-trained, e.g., 'yolov5s' for small model)
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)  # Use 'yolov5s', 'yolov5m', 'yolov5l', etc.
+
+# Load the table image
+table_image = cv2.imread("C:/Users/MSI/Documents/Thesis_Project/Automste_Testing_DeepSeek_Model/Fine-Tuning-Deep-Seek_R1/static/images/6b4ba075eb7040f2b0e60ea75b4a73c3.png")
+if table_image is None:
+    print("Error: Could not load the table image.")
+    exit()
+
+# Resize the table image for overlay
+table_image_resized = cv2.resize(table_image, (400, 200))  # Adjust size as needed
+
+# Set up webcam
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Error: Could not open webcam.")
+    exit()
+
+# Run YOLOv5 on the table image to detect objects
+# YOLOv5 expects images in RGB format, so convert from BGR
+img_rgb = cv2.cvtColor(table_image, cv2.COLOR_BGR2RGB)
+results = model(img_rgb)  # Run inference
+detections = results.xyxy[0]  # Get bounding boxes (x1, y1, x2, y2, conf, cls)
+print(f"Number of detections: {len(detections)}")  # Debug: Check if YOLO detects anything
+
+# Store detected objects with their labels
+detected_objects = []
+for detection in detections:
+    x1, y1, x2, y2, conf, cls = detection  # YOLOv5 output: [x1, y1, x2, y2, confidence, class]
+    x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])  # Convert to integers
+    conf = conf.item()  # Confidence score
+    cls = int(cls.item())  # Class index
+    label = model.names[cls]  # Get class name from YOLOv5 model
+    print(f"Detection: {label} (confidence: {conf})")  # Debug: Check detected objects and confidence
+    if conf > 0.3:  # Confidence threshold
+        detected_objects.append((x1, y1, x2, y2, f"{label} ({conf:.2f})"))
+
+# Scale the bounding box coordinates to the resized table image
+scale_x = table_image_resized.shape[1] / table_image.shape[1]
+scale_y = table_image_resized.shape[0] / table_image.shape[0]
+scaled_detections = []
+for x1, y1, x2, y2, label in detected_objects:
+    x1, x2 = int(x1 * scale_x), int(x2 * scale_x)
+    y1, y2 = int(y1 * scale_y), int(y2 * scale_y)
+    scaled_detections.append((x1, y1, x2, y2, label))
+
+while True:
+    # Capture frame from webcam
+    ret, frame = cap.read()
+    if not ret:
+        print("Error: Could not read frame.")
+        break
+
+    # Overlay the table image on the frame (top-left corner)
+    h, w, _ = table_image_resized.shape
+    frame_with_table = frame.copy()
+    frame_with_table[0:h, 0:w] = table_image_resized
+
+    # Draw bounding boxes and labels on the overlaid table image
+    for x1, y1, x2, y2, label in scaled_detections:
+        # Draw bounding box
+        cv2.rectangle(frame_with_table, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # Draw label above the box
+        cv2.putText(frame_with_table, label, (x1, y1 - 10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    # Display the frame
+    cv2.imshow("Webcam with Table and YOLOv5 Detections", frame_with_table)
+
+    # Exit on 'q' key press
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release resources
+cap.release()
+cv2.destroyAllWindows()
