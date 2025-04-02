@@ -3,245 +3,78 @@ import cv2
 import torch
 import random
 import numpy as np
+from collections import defaultdict
 
 # Initialize EasyOCR reader
 reader = easyocr.Reader(['en'])
 
-# Initialize YOLOv5 model (Pre-trained)
-model = torch.hub.load('ultralytics/yolov5', 'yolov5n')  # Use 'yolov5s' for small model or 'yolov5m'/'yolov5l' for larger models
+# Initialize YOLOv5 model
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
+model.conf = 0.3
+model.iou = 0.4
 
-# Read image
+# Read and resize image
 img = cv2.imread('image_test_case.png')
-
-# Resize the image if it's too large
-scale_percent = 70  # Adjust this scale as needed
+scale_percent = 70
 width = int(img.shape[1] * scale_percent / 100)
 height = int(img.shape[0] * scale_percent / 100)
 img_resized = cv2.resize(img, (width, height))
 
-# Perform YOLOv5 object detection
+# YOLO Detection
 results = model(img_resized)
+detections = results.pandas().xyxy[0]
 
-# Get the detected bounding boxes for text-related objects
-text_bboxes = results.xywh[0]  # Bounding boxes, classes, and confidence scores
+for _, det in detections.iterrows():
+    if det['confidence'] > 0.25:
+        x1, y1, x2, y2 = int(det['xmin']), int(det['ymin']), int(det['xmax']), int(det['ymax'])
+        color = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
+        cv2.rectangle(img_resized, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(img_resized, f"{det['name']} {det['confidence']:.2f}",
+                    (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-# Check if YOLO detected anything
-print(f"Number of detections: {len(text_bboxes)}")
+# EasyOCR Processing
+ocr_results = reader.readtext(img_resized, paragraph=False, detail=1, batch_size=10, width_ths=0.4)
+custom_labels = ['First Name', 'Second Name', 'Age', 'Gender', 'Email',
+                 'School Name', 'Address', 'City', 'Result']
 
-# Draw YOLO detections (Object detection boxes)
-for bbox in text_bboxes:
-    x_center, y_center, w, h, conf, cls = bbox
-
-    if conf > 0.5:  # Threshold for confidence; adjust as needed
-        # Convert YOLO bounding box from center format to corner format
-        x1 = int((x_center - w / 2))
-        y1 = int((y_center - h / 2))
-        x2 = int((x_center + w / 2))
-        y2 = int((y_center + h / 2))
-        
-        # Generate a random color for the bounding box (RGB format)
-        color = [random.randint(0, 255) for _ in range(3)]  # Random color for each object
-        
-        # Draw bounding box for detected object (YOLO)
-        cv2.rectangle(img_resized, (x1, y1), (x2, y2), color, 2)  # Bounding box with random color
-        label = f"Object {int(cls)}"  # Label as object
-        cv2.putText(img_resized, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-# Perform text detection using EasyOCR
-ocr_results = reader.readtext(img_resized)
-
-# List of custom labels for each column
-custom_labels = ['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 'Result']
-
-# Helper functions to get y-center, x-start, and x-end of a bounding box
 def get_y_center(bbox):
-    (x1, y1), (x2, y2), (x3, y3), (x4, y4) = bbox
-    return (y1 + y3) / 2
+    return (bbox[0][1] + bbox[2][1]) / 2
 
-def get_x_start(bbox):
-    (x1, y1), (x2, y2), (x3, y3), (x4, y4) = bbox
-    return x1
+def get_x_center(bbox):
+    return (bbox[0][0] + bbox[2][0]) / 2
 
-def get_x_end(bbox):
-    (x1, y1), (x2, y2), (x3, y3), (x4, y4) = bbox
-    return x3
-
-# Step 1: Sort OCR results by y-coordinate (to group by rows) and then by x-coordinate (to order within rows)
-ocr_results_sorted = sorted(ocr_results, key=lambda x: (get_y_center(x[0]), get_x_start(x[0])))
-
-# Step 2: Group OCR results into rows based on y-coordinates
-rows = []
-current_row = []
-last_y = None
-y_threshold = 50  # Increased to better group text within the same row
-
-for result in ocr_results_sorted:
-    bbox, text, prob = result
+rows = defaultdict(list)
+for bbox, text, prob in ocr_results:
     y_center = get_y_center(bbox)
+    rows[round(y_center / 10) * 10].append((bbox, text.strip(), prob))
+
+sorted_rows = sorted(rows.items(), key=lambda x: x[0])
+
+for row_idx, (y_pos, row_items) in enumerate(sorted_rows):
+    row_items.sort(key=lambda x: get_x_center(x[0]))
+    print(f"\nRow {row_idx + 1}:")
     
-    if last_y is None or abs(y_center - last_y) < y_threshold:
-        current_row.append(result)
-    else:
-        rows.append(current_row)
-        current_row = [result]
-    last_y = y_center
-
-# Add the last row
-if current_row:
-    rows.append(current_row)
-
-# Debug: Print the number of rows
-print(f"Total rows detected: {len(rows)}")
-
-# Step 3: Skip the header row (first row) and process data rows
-data_rows = rows[1:]  # Skip the first row (header)
-
-# Step 4: Estimate column boundaries from the header row
-header_row = rows[0]  # First row is the header
-header_items = sorted(header_row, key=lambda x: get_x_start(x[0]))
-column_boundaries = []
-for idx, (bbox, text, prob) in enumerate(header_items):
-    x_start = get_x_start(bbox)
-    x_end = get_x_end(bbox)
-    print(f"Header {text}: x_start={x_start}, x_end={x_end}")
-    if idx == 0:
-        column_boundaries.append(x_start)
-    if idx == len(header_items) - 1:
-        column_boundaries.append(x_end)
-    else:
-        next_x_start = get_x_start(header_items[idx + 1][0])
-        boundary = (x_end + next_x_start) / 2
-        column_boundaries.append(boundary)
-
-# Debug: Print column boundaries
-print("Column boundaries:", column_boundaries)
-
-# Adjust column boundaries manually based on the raw text detections
-# Using the x-centers from Row 1:
-# Sophea: 83.0 (First Name)
-# Oudom: 266.0 (Second Name)
-# 21: 420.0 (Age)
-# Male: 621.0 (Gender)
-# dom@gmail.c: 861.0, om: 794.0 (Email, should be merged)
-# Rupp: 993.5 (School Name)
-# St.99 Hm2o: 1219.0 (Address)
-# PPenh: 1375.0 (City)
-# Pass: 1546.0 (Result)
-adjusted_boundaries = [30, 200, 350, 500, 700, 900, 1100, 1300, 1500, 1600]
-print("Adjusted column boundaries:", adjusted_boundaries)
-
-# Step 5: Merge split text detections within each row using column boundaries
-def merge_split_text(row, column_boundaries):
-    # Sort the row by x-coordinate
-    row_sorted = sorted(row, key=lambda x: get_x_start(x[0]))
-
-    # Debug: Print the raw text detections in the row
-    print("Raw text detections in row:")
-    for bbox, text, prob in row_sorted:
-        x_center = (get_x_start(bbox) + get_x_end(bbox)) / 2
-        print(f"  Text: {text}, x_center: {x_center}")
-
-    # Assign each text item to a column based on its x-coordinate
-    column_items = [[] for _ in range(len(custom_labels))]
-    for bbox, text, prob in row_sorted:
-        x_center = (get_x_start(bbox) + get_x_end(bbox)) / 2
-        # Find the column this text belongs to
-        for col_idx in range(len(column_boundaries) - 1):
-            if column_boundaries[col_idx] <= x_center < column_boundaries[col_idx + 1]:
-                column_items[col_idx].append((bbox, text, prob))
-                break
-
-    # Merge text within each column with improved splitting logic
-    merged_row = []
-    for col_idx, items in enumerate(column_items):
-        if not items:
-            # If the column is empty, add a placeholder
-            merged_row.append(([(0, 0), (0, 0), (0, 0), (0, 0)], "", 0.0))
-        else:
-            # Merge all items in this column
-            combined_text = " ".join(item[1] for item in items)
-            # Use the bounding box of the first item (or combine them)
-            bbox = items[0][0]
-            prob = max(item[2] for item in items)
-            if len(items) > 1:
-                # Combine bounding boxes
-                (x1, y1), (x2, y2), (x3, y3), (x4, y4) = bbox
-                for other_bbox, _, _ in items[1:]:
-                    (nx1, ny1), (nx2, ny2), (nx3, ny3), (nx4, ny4) = other_bbox
-                    x1 = min(x1, nx1)
-                    y1 = min(y1, ny1)
-                    x2 = max(x2, nx2)
-                    y2 = max(y2, ny2)
-                    x3 = max(x3, nx3)
-                    y3 = max(y3, ny3)
-                    x4 = min(x4, nx4)
-                    y4 = min(y4, ny4)
-                bbox = [(x1, y1), (x2, y2), (x3, y3), (x4, y4)]
-
-            # Post-process the combined text based on the column
-            if col_idx == 4:  # Email column
-                # Remove spaces in email addresses
-                combined_text = combined_text.replace(" ", "")
-            merged_row.append((bbox, combined_text, prob))
-
-    # Ensure the row has the correct number of columns
-    while len(merged_row) < len(custom_labels):
-        merged_row.append(([(0, 0), (0, 0), (0, 0), (0, 0)], "", 0.0))
-
-    # Post-process to fix column misalignment
-    # Step 1: Fix "Second Name" and "Age"
-    if merged_row[1][1]:  # If Second Name column has text
-        parts = merged_row[1][1].split()
-        if len(parts) > 1 and parts[-1].isdigit():
-            merged_row[1] = (merged_row[1][0], " ".join(parts[:-1]), merged_row[1][2])  # Second Name
-            merged_row[2] = (merged_row[2][0], parts[-1], merged_row[2][2])  # Age
-
-    # Step 2: Split "Address", "City", and "Result" correctly
-    if merged_row[6][1]:  # If Address column has text
-        parts = merged_row[6][1].split()
-        if len(parts) >= 3:  # Expecting something like "St.99 Hm2o PPenh Pass"
-            # Last part should be "Pass" or "Fail"
-            if parts[-1] in ["Pass", "Fail"]:
-                merged_row[8] = (merged_row[8][0], parts[-1], merged_row[8][2])  # Result
-                # Second-to-last part should be the city (e.g., "PPenh")
-                merged_row[7] = (merged_row[7][0], parts[-2], merged_row[7][2])  # City
-                # The rest is the address
-                merged_row[6] = (merged_row[6][0], " ".join(parts[:-2]), merged_row[6][2])  # Address
-
-    return merged_row[:len(custom_labels)]  # Ensure the row matches the number of columns
-
-# Step 6: Process each row, merge split text, and assign labels
-for row_idx, row in enumerate(data_rows):
-    # Merge split text within the row using adjusted column boundaries
-    merged_row = merge_split_text(row, adjusted_boundaries)
+    row_texts = [text for _, text, _ in row_items]
     
-    # Debug: Print the merged row to verify the text
-    print(f"Row {row_idx + 1}:")
-    for idx, (bbox, text, prob) in enumerate(merged_row):
-        # Ensure email has no spaces
-        if idx == 4:
-            text = text.replace(" ", "")
-            merged_row[idx] = (bbox, text, prob)
-        print(f"  Column {idx + 1} ({custom_labels[idx]}): {text}")
-
-    # Assign labels to each column in the row
-    for idx, (bbox, text, prob) in enumerate(merged_row):
-        if text == "":
-            continue  # Skip empty items (from padding)
-
-        (x1_text, y1_text), (x2_text, y2_text), (x3_text, y3_text), (x4_text, y4_text) = bbox
-        x1_text, y1_text, x3_text, y3_text = int(x1_text), int(y1_text), int(x3_text), int(y3_text)
-
-        # Generate a random color for each OCR text bounding box
-        color = [random.randint(0, 255) for _ in range(3)]  # Random color for each bounding box
-
-        # Assign the custom label based on the column index
-        label = custom_labels[idx] if idx < len(custom_labels) else "Text"
-        cv2.rectangle(img_resized, (x1_text - 10, y1_text - 10), (x3_text + 10, y3_text + 10), color, 2)
-        cv2.putText(img_resized, label, (x1_text, y1_text - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-# Resize window to fit screen
-cv2.namedWindow('Image', cv2.WINDOW_NORMAL)  
-cv2.imshow('Image', img_resized)
+    if row_idx == 0:  # Ensure proper header alignment
+        row_texts = custom_labels[:len(row_texts)]
+    
+    if len(row_texts) == len(custom_labels):
+        for col_idx, text in enumerate(row_texts):
+            print(f"  {custom_labels[col_idx]}: {text}")
+    elif len(row_texts) >= 2:  # Avoid rows with too little data
+        for col_idx, text in enumerate(row_texts):
+            label = custom_labels[min(col_idx, len(custom_labels)-1)]
+            print(f"  {label}: {text}")
+            
+    # Draw bounding boxes for OCR detected text
+    for bbox, text, _ in row_items:
+        color = (0, 255, 0)  # Green for all detected text
+        cv2.rectangle(img_resized, tuple(map(int, bbox[0])), tuple(map(int, bbox[2])), color, 2)
+        cv2.putText(img_resized, text,
+                    (int(bbox[0][0]), int(bbox[0][1]-5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+    
+cv2.imshow('Combined Detection', img_resized)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
