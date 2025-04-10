@@ -84,3 +84,5 @@ for i in range(50):
     output_path = os.path.join(output_dir, f"table_image_{i}.png")
     create_table_image(df, output_path)
     print(f"Generated image: {output_path}")
+
+    

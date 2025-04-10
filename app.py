@@ -398,71 +398,70 @@ import os
 import uuid
 import textwrap
 
-def create_image_from_results(results):
-    # A4 dimensions at 300 DPI (print quality)
-    width = 2480  # 210 mm = 8.27 in × 300 DPI
-    height = 3508  # 297 mm = 11.69 in × 300 DPI
-    num_rows = len(results)
-    num_cols = len(results[0].keys())  # Number of columns
-    font_size = 40  # Adjust as needed
-    line_height = int(font_size * 1.5)  # Vertical spacing
-    header_height = int(font_size * 3)  # Header space
-    row_spacing = int(font_size * 2)  # Row spacing
-    margin_left = 50  # Left margin
-    column_width = (width - 2 * margin_left) // num_cols  # Dynamic column width
-    
-    # Estimate characters per line based on font size and column width
-    char_width = font_size * 0.6  # Approximate pixel width per character (adjust if needed)
-    wrap_width = int(column_width // char_width)  # Max characters per line to fit column
+from PIL import Image, ImageDraw, ImageFont
+import os
+import uuid
 
-    # Create a blank image with white background (A4 size)
-    img = Image.new('RGB', (width, height), color='white')
-    d = ImageDraw.Draw(img)
-    
-    # Use a basic font
+def create_image_from_results(results):
+    # Adjusted parameters to match the image
+    font_size = 20  # Reduced font size for a closer match
+    row_padding = 50  # Tighter vertical spacing between rows
+    header_padding = 60  # Reduced space between header and first row
+    col_spacing = 60  # Slightly reduced horizontal spacing between columns
+    margin_left = 20  # Reduced left margin
+    margin_top = 20  # Reduced top margin
+
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
     except IOError:
         font = ImageFont.load_default()
-    
-    y_position = 50  # Starting position
-    
-    # Add headers
+
+    dummy_img = Image.new("RGB", (1, 1))
+    draw = ImageDraw.Draw(dummy_img)
+
     headers = list(results[0].keys())
+    num_rows = len(results)
+
+    # Calculate column widths
+    col_widths = []
+    for header in headers:
+        max_width = draw.textbbox((0, 0), header, font=font)[2]
+        for row in results:
+            value = str(row[header])
+            text_width = draw.textbbox((0, 0), value, font=font)[2]
+            max_width = max(max_width, text_width)
+        col_widths.append(max_width + 10)  # Reduced padding per column
+
+    # Calculate total width and height
+    total_width = sum(col_widths) + (len(headers) - 1) * col_spacing + 2 * margin_left
+    row_height = int(font_size * 1.5)  # Adjusted row height for tighter spacing
+    estimated_height = margin_top + header_padding + (row_height + row_padding) * num_rows + 20  # Reduced extra padding
+
+    img = Image.new("RGB", (total_width, estimated_height), color="white")
+    draw = ImageDraw.Draw(img)
+
+    # Draw headers
+    x_offset = margin_left
+    y_offset = margin_top
     for i, header in enumerate(headers):
-        x_position = margin_left + i * column_width
-        d.text((x_position, y_position), header, font=font, fill="black")
-    y_position += header_height
-    
-    # Add result rows
-    for row_idx, row in enumerate(results):
-        max_lines_in_row = 1
-        for i, (key, value) in enumerate(row.items()):
-            x_position = margin_left + i * column_width
-            text_to_draw = str(value)
-            if key in ['Address', 'City', 'Email', 'School Name'] and len(text_to_draw) > wrap_width:
-                # Wrap long text to fit column
-                wrapped_text = textwrap.fill(text_to_draw, width=wrap_width)
-                lines = wrapped_text.split('\n')
-                for j, line in enumerate(lines[:5]):  # Limit to 5 lines (adjustable)
-                    # Use max_width to prevent overflow (Pillow 9.2.0+)
-                    d.text((x_position, y_position + j * line_height), line, font=font, fill="black", max_width=column_width)
-                max_lines_in_row = max(max_lines_in_row, min(len(lines), 5))
-            else:
-                d.text((x_position, y_position), text_to_draw, font=font, fill="black", max_width=column_width)
-                max_lines_in_row = max(max_lines_in_row, 1)
-        
-        # Adjust y_position
-        y_position += max_lines_in_row * line_height
-        if row_idx < num_rows - 1:
-            y_position += row_spacing
-    
-    # Check height
-    if y_position > height:
-        print(f"Warning: Content exceeds A4 height ({height}px). Current height: {y_position}px")
-    
-    # Save image
-    image_path = os.path.join(STATIC_IMAGES_FOLDER, f"{uuid.uuid4().hex}.png")
+        draw.text((x_offset, y_offset), header, font=font, fill="black")
+        x_offset += col_widths[i] + col_spacing
+    y_offset += header_padding
+
+    # Draw rows
+    for row in results:
+        x_offset = margin_left
+        for i, header in enumerate(headers):
+            text = str(row[header])
+            draw.text((x_offset, y_offset), text, font=font, fill="black")
+            x_offset += col_widths[i] + col_spacing
+        y_offset += row_height + row_padding
+
+    # Create folder if not exists
+    output_folder = "static/images"
+    os.makedirs(output_folder, exist_ok=True)
+
+    image_path = os.path.join(output_folder, f"{uuid.uuid4().hex}.png")
     img.save(image_path)
 
     return image_path
