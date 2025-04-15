@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, send_file, send_from_directory
+from flask import Flask, render_template, request, send_file, send_from_directory, jsonify
 import sqlite3
 import pandas as pd
 from datetime import datetime
 from openpyxl import Workbook
 import openpyxl
+from flask_cors import CORS
 import os
 import random
 import uuid
@@ -11,6 +12,7 @@ import string
 import re
 
 app = Flask(__name__)
+CORS(app)
 
 # Register the basename filter
 from os.path import basename
