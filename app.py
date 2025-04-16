@@ -255,7 +255,8 @@ def run():
     except Exception as e:
         return render_template('result.html', data={"error": f"Error in RUN: {str(e)}"})
 
-@app.route('/student_list')
+# Route to list students (GET request for viewing students)
+@app.route('/student_list', methods=['GET'])
 def student_list():
     con = sqlite3.connect("database.db")
     con.row_factory = sqlite3.Row
@@ -264,6 +265,51 @@ def student_list():
     rows = cur.fetchall()
     con.close()
     return render_template("list.html", rows=rows)
+
+# Route to handle the form submission (POST request)
+@app.route('/submit_student', methods=['POST'])
+def submit_student():
+    # Get the data from the frontend
+    data = request.json
+    first_name = data.get('first_name').strip()
+    second_name = data.get('second_name').strip()
+    age = int(data.get('age').strip())
+    gender = data.get('gender').strip().lower()  # Convert gender to lowercase
+    email = data.get('email').strip()
+
+    print(f"Frontend Data: {first_name}, {second_name}, {age}, {gender}, {email}")
+
+    # Compare with the data in the database
+    con = sqlite3.connect("database.db")
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute("SELECT rowid, * FROM students")
+    rows = cur.fetchall()
+    con.close()
+
+    match_found = False
+    for row in rows:
+        # Convert gender from the database to lowercase for case-insensitive comparison
+        db_gender = row['gender'].strip().lower()
+        
+        print(f"Database Row: {row['first_name']}, {row['second_name']}, {row['age']}, {db_gender}, {row['email']}")
+        
+        # Compare all fields, including gender (case-insensitive)
+        if (row['first_name'].strip() == first_name and
+            row['second_name'].strip() == second_name and
+            row['age'] == age and
+            db_gender == gender and
+            row['email'].strip() == email):
+            match_found = True
+            break
+
+    # Return a response based on whether a match was found
+    if match_found:
+        matched_student = dict(row)
+        return jsonify({"message": "Match found!", "match": True, "student": matched_student}), 200
+    else:
+        return jsonify({"message": "No match found.", "match": False}), 200
+
 
 @app.route("/edit", methods=['POST', 'GET'])
 def edit():
