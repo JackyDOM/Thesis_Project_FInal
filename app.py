@@ -10,6 +10,8 @@ import random
 import uuid
 import string
 import re
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +19,7 @@ CORS(app)
 # Register the basename filter
 from os.path import basename
 app.jinja_env.filters['basename'] = basename
+
 
 # Ensure an 'uploads' directory exists
 UPLOAD_FOLDER = 'uploads'
@@ -27,6 +30,13 @@ if not os.path.exists(UPLOAD_FOLDER):
 STATIC_IMAGES_FOLDER = os.path.join('static', 'images')
 if not os.path.exists(STATIC_IMAGES_FOLDER):
     os.makedirs(STATIC_IMAGES_FOLDER)
+
+UPLOAD_FOLDER = os.path.join('static', 'uploads')  # Path to the uploads folder
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Create uploads folder if it doesn't exist
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # Initialize the database (create table if it doesn’t exist)
 def init_db():
@@ -41,7 +51,8 @@ def init_db():
                 email TEXT,
                 school_name TEXT,
                 addr TEXT,
-                city TEXT
+                city TEXT,
+                filename TEXT
             )
         """)
         cur.execute("""
@@ -105,14 +116,30 @@ def addrec():
             if not re.match(email_pattern, email):
                 return render_template('result.html', data={"error": "Invalid email format"})
 
-            # Insert into database (unchanged)
+            # Handle image upload
+            image_filename = None
+            if 'profile_image' in request.files:
+                file = request.files['profile_image']
+                if file and file.filename != '':
+                    # Validate file extension
+                    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+                    if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions:
+                        # Create a unique filename
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        ext = file.filename.rsplit('.', 1)[1].lower()
+                        image_filename = f"{first_name}_{second_name}_{timestamp}.{ext}"
+                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+                    else:
+                        return render_template('result.html', data={"error": "Invalid image format. Allowed: png, jpg, jpeg, gif"})
+
+            # Insert into database
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
                 cur.execute("""
                     INSERT INTO students 
-                    (first_name, second_name, age, gender, email, school_name, addr, city) 
-                    VALUES (?,?,?,?,?,?,?,?)
-                """, (first_name, second_name, age, gender, email, school_name, addr, city))
+                    (first_name, second_name, age, gender, email, school_name, addr, city, filename) 
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                """, (first_name, second_name, age, gender, email, school_name, addr, city, image_filename))
                 policy_id = cur.lastrowid
                 policy_id_str = f"POL{policy_id:05d}"
 
@@ -150,20 +177,21 @@ def addrec():
                     """, (policy_id_str, tran["sel"], tran["tran_date"], tran["time"], tran["code"], tran["description"], tran["loc"]))
                 con.commit()
 
-            # Update students.xlsx with only one row per student
+            # Update students.xlsx
             file_path = os.path.join(app.static_folder, 'students.xlsx')
             if not os.path.exists(file_path):
                 wb = Workbook()
                 ws = wb.active
                 ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 
-                           'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
+                           'Image Filename', 'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
             else:
                 wb = openpyxl.load_workbook(file_path)
                 ws = wb.active
 
-            # Write only one row, using the first transaction's data and school_name as description
-            tran = transactions[0]  # Use the first transaction
+            # Write one row, including image filename
+            tran = transactions[0]
             ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
+                       image_filename if image_filename else '',
                        tran["sel"], tran["tran_date"], tran["time"], tran["code"], school_name, tran["loc"]])
             wb.save(file_path)
 
@@ -177,6 +205,7 @@ def addrec():
                     "school_name": school_name,
                     "addr": addr,
                     "city": city,
+                    "image_filename": image_filename if image_filename else '',
                     "sel": transactions[0]["sel"],
                     "tran_date": transactions[0]["tran_date"],
                     "time": transactions[0]["time"],
@@ -191,6 +220,7 @@ def addrec():
                 "first_name": first_name,
                 "second_name": second_name,
                 "city": city,
+                "image_filename": image_filename if image_filename else '',
                 "transactions": transactions,
                 "detail_data": detail_data
             }
@@ -220,8 +250,8 @@ def run():
             policy_id = f"POL{int(rowid):05d}"
             cur.execute("SELECT sel, tran_date, time, code, description, loc FROM transactions WHERE policy_id = ?", (policy_id,))
             transactions = [{"sel": row[0], "tran_date": row[1], "time": row[2], "code": row[3], "description": row[4], "loc": row[5]} for row in cur.fetchall()]
-            if not transactions:
-                transactions = []
+            
+            image_filename = student['filename'] if student['filename'] else ''
 
             detail_data = [
                 {
@@ -233,6 +263,7 @@ def run():
                     "school_name": student["school_name"],
                     "addr": student["addr"],
                     "city": student["city"],
+                    "image_filename": image_filename,
                     "sel": transactions[0]["sel"],
                     "tran_date": transactions[0]["tran_date"],
                     "time": transactions[0]["time"],
@@ -247,6 +278,7 @@ def run():
             "first_name": student["first_name"],
             "second_name": student["second_name"],
             "city": student["city"],
+            "image_filename": image_filename,
             "transactions": transactions,
             "detail_data": detail_data
         }
@@ -254,6 +286,7 @@ def run():
 
     except Exception as e:
         return render_template('result.html', data={"error": f"Error in RUN: {str(e)}"})
+    
 
 # Route to list students (GET request for viewing students)
 @app.route('/student_list', methods=['GET'])
@@ -266,49 +299,98 @@ def student_list():
     con.close()
     return render_template("list.html", rows=rows)
 
-# Route to handle the form submission (POST request)
-@app.route('/submit_student', methods=['POST'])
-def submit_student():
-    # Get the data from the frontend
-    data = request.json
-    first_name = data.get('first_name').strip()
-    second_name = data.get('second_name').strip()
-    age = int(data.get('age').strip())
-    gender = data.get('gender').strip().lower()  # Convert gender to lowercase
-    email = data.get('email').strip()
 
-    print(f"Frontend Data: {first_name}, {second_name}, {age}, {gender}, {email}")
+# Load DeepSeek model and tokenizer once when the app starts
+# model_path = "./deepseek_r1_model"
+# tokenizer = AutoTokenizer.from_pretrained(model_path)
+# model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float32).to("cpu")
+# model.eval()
 
-    # Compare with the data in the database
-    con = sqlite3.connect("database.db")
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    cur.execute("SELECT rowid, * FROM students")
-    rows = cur.fetchall()
-    con.close()
+# def query_deepseek(prompt):
+#     inputs = tokenizer(prompt, return_tensors="pt").to("cpu")
+#     with torch.no_grad():
+#         outputs = model.generate(**inputs, max_new_tokens=50)
+#     result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+#     return result
 
-    match_found = False
-    for row in rows:
-        # Convert gender from the database to lowercase for case-insensitive comparison
-        db_gender = row['gender'].strip().lower()
-        
-        print(f"Database Row: {row['first_name']}, {row['second_name']}, {row['age']}, {db_gender}, {row['email']}")
-        
-        # Compare all fields, including gender (case-insensitive)
-        if (row['first_name'].strip() == first_name and
-            row['second_name'].strip() == second_name and
-            row['age'] == age and
-            db_gender == gender and
-            row['email'].strip() == email):
-            match_found = True
-            break
+# # Route to handle the form submission (POST request)
+# @app.route('/submit_student', methods=['POST'])
+# def submit_student():
+#     # Step 1: Get data from frontend
+#     data = request.json
+#     first_name = data.get('first_name').strip()
+#     second_name = data.get('second_name').strip()
+#     age = int(data.get('age').strip())
+#     gender = data.get('gender').strip().lower()
+#     email = data.get('email').strip()
 
-    # Return a response based on whether a match was found
-    if match_found:
-        matched_student = dict(row)
-        return jsonify({"message": "Match found!", "match": True, "student": matched_student}), 200
-    else:
-        return jsonify({"message": "No match found.", "match": False}), 200
+#     print(f"[Frontend Data] {first_name}, {second_name}, {age}, {gender}, {email}")
+
+#     # Step 2: Fetch student records from DB
+#     con = sqlite3.connect("database.db")
+#     con.row_factory = sqlite3.Row
+#     cur = con.cursor()
+#     cur.execute("SELECT rowid, * FROM students")
+#     rows = cur.fetchall()
+#     con.close()
+
+#     print(f"[DB Records] {rows}")
+
+#     # Step 3: Compare each record using DeepSeek
+#     for row in rows:
+#         db_data = {
+#             "first_name": row["first_name"].strip(),
+#             "second_name": row["second_name"].strip(),
+#             "age": row["age"],
+#             "gender": row["gender"].strip().lower(),
+#             "email": row["email"].strip()
+#         }
+
+#         prompt = (
+#             f"Does this input match the student record?\n\n"
+#             f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
+#             f"Record: First name: {db_data['first_name']}, Second name: {db_data['second_name']}, "
+#             f"Age: {db_data['age']}, Gender: {db_data['gender']}, Email: {db_data['email']}\n\n"
+#             f"Answer 'MATCH' if all values are the same, otherwise 'NOT MATCH'."
+#         )
+
+#         response = query_deepseek(prompt)
+#         print(f"[DeepSeek Response] {response}")
+
+#         if not response:
+#             print("[Error] No response from DeepSeek!")
+
+#         # Normalize the response
+#         normalized_response = response.strip().upper()
+#         print(f"[Normalized DeepSeek Response] {normalized_response}")
+
+#         # Manually check for match by comparing each field
+#         if (
+#             first_name == db_data["first_name"] and
+#             second_name == db_data["second_name"] and
+#             age == db_data["age"] and
+#             gender == db_data["gender"] and
+#             email == db_data["email"]
+#         ):
+#             normalized_response = "MATCH"
+#             print("[Manual Match] Match found with manual comparison")
+
+#         # Step 4: Check for a match based on the response from DeepSeek or manual comparison
+#         if normalized_response == "MATCH":
+#             matched_student = dict(row)
+#             print("[Match Found] Returning matched student")
+#             return jsonify({
+#                 "message": "Match found!",
+#                 "match": True,
+#                 "student": matched_student
+#             }), 200
+
+#     # Step 5: No match found
+#     print("[No Match] Returning no match")
+#     return jsonify({
+#         "message": "No match found.",
+#         "match": False
+#     }), 200
 
 
 @app.route("/edit", methods=['POST', 'GET'])
@@ -401,35 +483,51 @@ def delete():
             policy_id = f"POL{int(rowid):05d}"
             file_path = os.path.join(app.static_folder, 'students.xlsx')
 
-            # Delete from database
+            # Delete from database and handle image file
             with sqlite3.connect('database.db') as con:
+                con.row_factory = sqlite3.Row
                 cur = con.cursor()
-                cur.execute("DELETE FROM students WHERE rowid=?", (rowid,))
-                cur.execute("DELETE FROM transactions WHERE policy_id=?", (policy_id,))
+                # Fetch the filename before deleting
+                cur.execute("SELECT filename FROM students WHERE rowid = ?", (rowid,))
+                student = cur.fetchone()
+                if not student:
+                    return render_template('result.html', data={"error": "Student not found"})
+
+                # Delete the image file if it exists
+                image_filename = student['filename']
+                if image_filename:
+                    image_path = os.path.join(app.static_folder, 'uploads', image_filename)
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
+
+                # Delete student and transaction records
+                cur.execute("DELETE FROM students WHERE rowid = ?", (rowid,))
+                cur.execute("DELETE FROM transactions WHERE policy_id = ?", (policy_id,))
                 con.commit()
 
                 # Fetch remaining students and their transactions
-                cur.execute("SELECT first_name, second_name, age, gender, email, school_name, addr, city, rowid FROM students")
+                cur.execute("SELECT first_name, second_name, age, gender, email, school_name, addr, city, filename, rowid FROM students")
                 students = cur.fetchall()
 
             # Rewrite students.xlsx with one row per student
             wb = Workbook()
             ws = wb.active
             ws.append(['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 
-                       'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
+                       'Image Filename', 'SEL', 'Tran Date', 'Time', 'Code', 'Description', 'Loc'])
 
             for student in students:
-                first_name, second_name, age, gender, email, school_name, addr, city, student_rowid = student
+                first_name, second_name, age, gender, email, school_name, addr, city, filename, student_rowid = student
                 student_policy_id = f"POL{student_rowid:05d}"
                 cur.execute("SELECT sel, tran_date, time, code, description, loc FROM transactions WHERE policy_id = ?", (student_policy_id,))
                 transactions = cur.fetchall()
-                tran = transactions[0]  # Use the first transaction
-                ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
-                           tran[0], tran[1], tran[2], tran[3], school_name, tran[5]])  # Use school_name as description
+                if transactions:  # Only append if there are transactions
+                    tran = transactions[0]  # Use the first transaction
+                    ws.append([first_name, second_name, age, gender, email, school_name, addr, city,
+                              filename if filename else '', tran[0], tran[1], tran[2], tran[3], school_name, tran[5]])
 
             wb.save(file_path)
 
-            data = {"message": "Record successfully deleted from the database and Excel file"}
+            data = {"message": "Record and associated image successfully deleted from the database and Excel file"}
         except Exception as e:
             if 'con' in locals():
                 con.rollback()

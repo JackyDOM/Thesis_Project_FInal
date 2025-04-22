@@ -123,6 +123,17 @@
                     <td class="label">Loc</td>
                     <td class="value">{{ detail.loc }}</td>
                 </tr>
+
+                <tr>
+                    <td class="label">Image</td>
+                    <td class="value">
+                        {% if detail.image_filename %}
+                            {{ detail.image_filename }}
+                        {% else %}
+                            No image uploaded
+                        {% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
             </table>
         </div>

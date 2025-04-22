@@ -5,7 +5,7 @@
 {% block content %}
     <div class="container">
         <h1>Add New Test-Case Student</h1>
-        <form action="{{ url_for('addrec') }}" method="POST" class="student-form">
+        <form action="{{ url_for('addrec') }}" method="POST" class="student-form " enctype="multipart/form-data">
             <h3>Please Add the New Student Information:</h3>
 
             <div class="form-group">
@@ -51,6 +51,11 @@
             <div class="form-group">
                 <label for="city">City</label>
                 <input type="text" id="city" name="city" required />
+            </div>
+
+            <div class="form-group">
+                <label for="profile_image">Image</label>
+                <input type="file" id="profile_image" name="profile_image" accept="image/*" />
             </div>
 
             <div class="form-group">
