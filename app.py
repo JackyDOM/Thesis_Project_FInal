@@ -68,6 +68,19 @@ def init_db():
         """)
         con.commit()
 
+
+import sqlite3
+
+con = sqlite3.connect("database.db")
+con.row_factory = sqlite3.Row
+cur = con.cursor()
+cur.execute("SELECT rowid, * FROM students")
+rows = cur.fetchall()
+print("All records:")
+for row in rows:
+    print(dict(row))
+con.close()
+
 # Call this once to set up the database
 init_db()
 
@@ -323,7 +336,7 @@ def submit_student():
         second_name = request.form.get('second_name', '').strip()
         age = request.form.get('age', '').strip()
         gender = request.form.get('gender', '').strip().lower()
-        email = request.form.get('email', '').strip()
+        email = request.form.get('email', '').strip().lower()
         school_name = request.form.get('school_name', '').strip()
         address = request.form.get('address', '').strip()
         city = request.form.get('city', '').strip()
@@ -370,12 +383,27 @@ def submit_student():
     # Step 3: Compare each record using DeepSeek
     for row in rows:
         db_data = {
-            "first_name": row["first_name"].strip(),
-            "second_name": row["second_name"].strip(),
-            "age": row["age"],
-            "gender": row["gender"].strip().lower(),
-            "email": row["email"].strip()
-        }
+        "first_name": row["first_name"].strip(),
+        "second_name": row["second_name"].strip(),
+        "age": int(row["age"]),
+        "gender": row["gender"].strip().lower(),
+        "email": row["email"].strip().lower()
+    }
+    
+    print(f"[Comparing Row {row['rowid']}]")
+    print(f"  First Name: Input={first_name}, DB={db_data['first_name']}")
+    print(f"  Second Name: Input={second_name}, DB={db_data['second_name']}")
+    print(f"  Age: Input={age}, DB={db_data['age']}, Types: {type(age)}, {type(db_data['age'])}")
+    print(f"  Gender: Input={gender}, DB={db_data['gender']}")
+    print(f"  Email: Input={email}, DB={db_data['email']}")
+        
+    if (
+        first_name.lower() == db_data["first_name"].lower() and
+        second_name.lower() == db_data["second_name"].lower() and
+        age == db_data["age"] and
+        gender.lower() == db_data["gender"].lower() and
+        email.lower() == db_data["email"].lower()
+    ):
 
         prompt = (
             f"Does this input match the student record?\n\n"
@@ -385,11 +413,25 @@ def submit_student():
             f"Answer 'MATCH' if all values are the same, otherwise 'NOT MATCH'."
         )
 
+        print(f"[DeepSeek Prompt] {prompt}")
         response = query_deepseek(prompt)
         print(f"[DeepSeek Response] {response}")
+        normalized_response_deepseek = response.strip().upper()
+        print(f"[Normalized DeepSeek Response] {normalized_response_deepseek}")
 
         if not response:
             print("[Error] No response from DeepSeek!")
+
+        # Manual match check (case-insensitive)
+        if (
+            first_name.lower() == db_data["first_name"].lower() and
+            second_name.lower() == db_data["second_name"].lower() and
+            age == db_data["age"] and
+            gender.lower() == db_data["gender"].lower() and
+            email.lower() == db_data["email"].lower()
+        ):
+            normalized_response = "MATCH"
+            print("[Manual Match] Match found with manual comparison")
 
         # Normalize the response
         normalized_response = response.strip().upper()
@@ -428,11 +470,18 @@ def submit_student():
             "age": age,
             "gender": gender,
             "email": email,
-            "school_name": school_name,
-            "address": address,
-            "city": city,
-            "image_name": image_name
-        }
+            "school_name": school_name if school_name else 'N/A',  # Handle empty fields
+            "address": address if address else 'N/A',            # This was missing proper handling
+            "city": city if city else 'N/A',                      # Handle empty fields
+            "image_name": image_name if image_name else 'No Image' # Handle empty fields
+        },
+        "mismatch_fields": [
+            "first_name" if first_name.lower() != db_data["first_name"].lower() else "",
+            "second_name" if second_name.lower() != db_data["second_name"].lower() else "",
+            "age" if age != db_data["age"] else "",
+            "gender" if gender.lower() != db_data["gender"].lower() else "",
+            "email" if email.lower() != db_data["email"].lower() else ""
+        ]
     }), 200
 
 
