@@ -328,7 +328,6 @@ def query_deepseek(prompt):
 def submit_student():
     # Step 1: Get data from frontend (multipart/form-data)
     try:
-        # Log raw form data for debugging
         print(f"[Raw Form Data] {dict(request.form)}")
         print(f"[Raw Files Data] {dict(request.files)}")
 
@@ -338,11 +337,9 @@ def submit_student():
         gender = request.form.get('gender', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         school_name = request.form.get('school_name', '').strip()
-        # Check for both 'address' and 'addr' to handle frontend mismatch
         address = request.form.get('address', request.form.get('addr', '')).strip()
         city = request.form.get('city', '').strip()
 
-        # Handle the image file
         image = request.files.get('image')
         image_name = None
         if image:
@@ -350,12 +347,10 @@ def submit_student():
             # Example: Save the image
             # image.save(os.path.join('uploads', image_name))
         
-        # Validate required fields
         if not all([first_name, second_name, age, gender, email]):
-            print(f"[Validation Error] Missing required fields: first_name={first_name}, second_name={second_name}, age={age}, gender={gender}, email={email}")
+            print(f"[Validation Error] Missing required fields")
             return jsonify({"error": "All required fields must be filled."}), 400
 
-        # Convert age to integer
         try:
             age = int(age)
         except ValueError:
@@ -412,7 +407,7 @@ def submit_student():
         # Return match immediately if manual match is True
         if is_manual_match:
             matched_student = dict(row)
-            matched_student["image_name"] = image_name  # Add image name to response
+            matched_student["image_name"] = image_name
             print(f"[Match Found] Row {row['rowid']} matched (Manual Match)")
             return jsonify({
                 "message": "Match found!",
@@ -420,7 +415,7 @@ def submit_student():
                 "student": matched_student
             }), 200
 
-        # Step 4: Use DeepSeek as a secondary check
+        # Step 4: Use DeepSeek as a secondary check (only if manual match fails)
         prompt = (
             f"Compare the following input and student record:\n\n"
             f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
@@ -433,18 +428,18 @@ def submit_student():
         try:
             response = query_deepseek(prompt)
             print(f"[DeepSeek Response] {response}")
-            # Extract MATCH or NOT MATCH from response
-            match = re.search(r'\b(MATCH|NOT MATCH)\b', response.upper()) if response else None
-            normalized_response = match.group(0) if match else "NO_RESPONSE"
+            # Strict parsing: only accept exact 'MATCH' or 'NOT MATCH'
+            match = re.search(r'^(MATCH|NOT MATCH)$', response.strip().upper())
+            normalized_response = match.group(0) if match else "NOT MATCH"  # Default to NOT MATCH if unclear
         except Exception as e:
-            normalized_response = "NO_RESPONSE"
+            normalized_response = "NOT MATCH"  # Default to NOT MATCH on error
             print(f"[DeepSeek Error] Failed to get response: {str(e)}")
         print(f"[Normalized DeepSeek Response] {normalized_response}")
 
-        # Check DeepSeek response only if manual match failed
-        if normalized_response == "MATCH":
+        # Only accept DeepSeek MATCH if it aligns with manual logic or is explicitly clear
+        if normalized_response == "MATCH" and is_manual_match:  # Require manual match for DeepSeek to confirm
             matched_student = dict(row)
-            matched_student["image_name"] = image_name  # Add image name to response
+            matched_student["image_name"] = image_name
             print(f"[Match Found] Row {row['rowid']} matched (DeepSeek)")
             return jsonify({
                 "message": "Match found!",
@@ -454,9 +449,8 @@ def submit_student():
 
     # Step 5: No match found
     print("[No Match] Returning no match")
-    # Identify mismatched fields for the last compared row (or use a generic response)
     mismatch_fields = []
-    if rows:  # Only compute mismatch if there are records
+    if rows:
         mismatch_fields = [
             field for field, input_val, db_val in [
                 ("first_name", first_name.lower(), db_data["first_name"]),

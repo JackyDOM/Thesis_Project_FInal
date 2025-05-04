@@ -1,0 +1,153 @@
+@app.route('/submit_student', methods=['POST'])
+def submit_student():
+    # Step 1: Get data from frontend (multipart/form-data)
+    try:
+        print(f"[Raw Form Data] {dict(request.form)}")
+        print(f"[Raw Files Data] {dict(request.files)}")
+
+        first_name = request.form.get('first_name', '').strip()
+        second_name = request.form.get('second_name', '').strip()
+        age = request.form.get('age', '').strip()
+        gender = request.form.get('gender', '').strip().lower()
+        email = request.form.get('email', '').strip().lower()
+        school_name = request.form.get('school_name', '').strip()
+        address = request.form.get('address', request.form.get('addr', '')).strip()
+        city = request.form.get('city', '').strip()
+
+        image = request.files.get('image')
+        image_name = None
+        if image:
+            image_name = image.filename
+            # Example: Save the image
+            # image.save(os.path.join('uploads', image_name))
+        
+        if not all([first_name, second_name, age, gender, email]):
+            print(f"[Validation Error] Missing required fields")
+            return jsonify({"error": "All required fields must be filled."}), 400
+
+        try:
+            age = int(age)
+        except ValueError:
+            print(f"[Validation Error] Invalid age: {age}")
+            return jsonify({"error": "Age must be a valid number."}), 400
+
+        print(f"[Frontend Data] {first_name}, {second_name}, {age}, {gender}, {email}, {school_name}, {address}, {city}, {image_name}")
+
+    except Exception as e:
+        print(f"[Error] Failed to parse form data: {str(e)}")
+        return jsonify({"error": "Invalid form data."}), 400
+
+    # Step 2: Fetch student records from DB
+    try:
+        con = sqlite3.connect("database.db")
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        cur.execute("SELECT rowid, * FROM students")
+        rows = cur.fetchall()
+        con.close()
+    except Exception as e:
+        print(f"[Error] Database error: {str(e)}")
+        return jsonify({"error": "Database error."}), 500
+
+    print(f"[DB Records] {rows}")
+
+    # Step 3: Compare each record
+    for row in rows:
+        db_data = {
+            "first_name": row["first_name"].strip().lower(),
+            "second_name": row["second_name"].strip().lower(),
+            "age": int(row["age"]),
+            "gender": row["gender"].strip().lower(),
+            "email": row["email"].strip().lower()
+        }
+
+        print(f"[Comparing Row {row['rowid']}]")
+        print(f"  First Name: Input={first_name.lower()}, DB={db_data['first_name']}")
+        print(f"  Second Name: Input={second_name.lower()}, DB={db_data['second_name']}")
+        print(f"  Age: Input={age}, DB={db_data['age']}, Types: {type(age)}, {type(db_data['age'])}")
+        print(f"  Gender: Input={gender.lower()}, DB={db_data['gender']}")
+        print(f"  Email: Input={email.lower()}, DB={db_data['email']}")
+
+        # Manual match check (case-insensitive)
+        is_manual_match = (
+            first_name.lower() == db_data["first_name"] and
+            second_name.lower() == db_data["second_name"] and
+            age == db_data["age"] and
+            gender.lower() == db_data["gender"] and
+            email.lower() == db_data["email"]
+        )
+        print(f"[Manual Match Result] {is_manual_match}")
+
+        # Return match immediately if manual match is True
+        if is_manual_match:
+            matched_student = dict(row)
+            matched_student["image_name"] = image_name
+            print(f"[Match Found] Row {row['rowid']} matched (Manual Match)")
+            return jsonify({
+                "message": "Match found!",
+                "match": True,
+                "student": matched_student
+            }), 200
+
+        # Step 4: Use DeepSeek as a secondary check (only if manual match fails)
+        prompt = (
+            f"Compare the following input and student record:\n\n"
+            f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
+            f"Record: First name: {row['first_name']}, Second name: {row['second_name']}, "
+            f"Age: {row['age']}, Gender: {row['gender']}, Email: {row['email']}\n\n"
+            f"Return only 'MATCH' or 'NOT MATCH' (in uppercase). Use case-insensitive comparison for strings and exact comparison for numbers."
+        )
+
+        print(f"[DeepSeek Prompt] {prompt}")
+        try:
+            response = query_deepseek(prompt)
+            print(f"[DeepSeek Response] {response}")
+            # Strict parsing: only accept exact 'MATCH' or 'NOT MATCH'
+            match = re.search(r'^(MATCH|NOT MATCH)$', response.strip().upper())
+            normalized_response = match.group(0) if match else "NOT MATCH"  # Default to NOT MATCH if unclear
+        except Exception as e:
+            normalized_response = "NOT MATCH"  # Default to NOT MATCH on error
+            print(f"[DeepSeek Error] Failed to get response: {str(e)}")
+        print(f"[Normalized DeepSeek Response] {normalized_response}")
+
+        # Only accept DeepSeek MATCH if it aligns with manual logic or is explicitly clear
+        if normalized_response == "MATCH" and is_manual_match:  # Require manual match for DeepSeek to confirm
+            matched_student = dict(row)
+            matched_student["image_name"] = image_name
+            print(f"[Match Found] Row {row['rowid']} matched (DeepSeek)")
+            return jsonify({
+                "message": "Match found!",
+                "match": True,
+                "student": matched_student
+            }), 200
+
+    # Step 5: No match found
+    print("[No Match] Returning no match")
+    mismatch_fields = []
+    if rows:
+        mismatch_fields = [
+            field for field, input_val, db_val in [
+                ("first_name", first_name.lower(), db_data["first_name"]),
+                ("second_name", second_name.lower(), db_data["second_name"]),
+                ("age", age, db_data["age"]),
+                ("gender", gender.lower(), db_data["gender"]),
+                ("email", email.lower(), db_data["email"])
+            ] if input_val != db_val
+        ]
+
+    return jsonify({
+        "message": "No match found.",
+        "match": False,
+        "student": {
+            "first_name": first_name,
+            "second_name": second_name,
+            "age": age,
+            "gender": gender,
+            "email": email,
+            "school_name": school_name if school_name else 'N/A',
+            "address": address if address else 'N/A',
+            "city": city if city else 'N/A',
+            "image_name": image_name if image_name else 'No Image'
+        },
+        "mismatch_fields": mismatch_fields
+    }), 200
