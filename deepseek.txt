@@ -151,3 +151,157 @@ def submit_student():
         },
         "mismatch_fields": mismatch_fields
     }), 200
+
+
+===================================================================
+from flask import Flask, request, jsonify
+import sqlite3
+import re
+
+app = Flask(__name__)
+
+# Simulated DeepSeek query function (replace with actual implementation)
+def query_deepseek(prompt):
+    # Mock response for demonstration; replace with actual DeepSeek API call
+    return "NOT MATCH"
+
+@app.route('/submit_student', methods=['POST'])
+def submit_student():
+    # Step 1: Get data from frontend (multipart/form-data)
+    try:
+        first_name = request.form.get('first_name', '').strip()
+        second_name = request.form.get('second_name', '').strip()
+        age = request.form.get('age', '').strip()
+        gender = request.form.get('gender', '').strip().lower()
+        email = request.form.get('email', '').strip().lower()
+        school_name = request.form.get('school_name', '').strip()
+        address = request.form.get('address', request.form.get('addr', '')).strip()
+        city = request.form.get('city', '').strip()
+
+        image = request.files.get('image')
+        image_name = image.filename if image else None
+
+        if not all([first_name, second_name, age, gender, email]):
+            return jsonify({"error": "All required fields must be filled."}), 400
+
+        try:
+            age = int(age)
+        except ValueError:
+            return jsonify({"error": "Age must be a valid number."}), 400
+
+    except Exception as e:
+        return jsonify({"error": "Invalid form data."}), 400
+
+    # Step 2: Fetch student records from DB
+    try:
+        con = sqlite3.connect("database.db")
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        cur.execute("SELECT rowid, * FROM students")
+        rows = cur.fetchall()
+        con.close()
+    except Exception as e:
+        return jsonify({"error": "Database error."}), 500
+
+    # Step 3: Compare each record and collect field comparisons
+    field_comparisons = []
+    for row in rows:
+        db_data = {
+            "first_name": row["first_name"].strip().lower(),
+            "second_name": row["second_name"].strip().lower(),
+            "age": int(row["age"]),
+            "gender": row["gender"].strip().lower(),
+            "email": row["email"].strip().lower()
+        }
+
+        # Field-by-field comparison
+        comparisons = [
+            {
+                "field": "first_name",
+                "backend_value": row["first_name"],
+                "frontend_value": first_name,
+                "result": "Pass" if first_name.lower() == db_data["first_name"] else "Fail"
+            },
+            {
+                "field": "second_name",
+                "backend_value": row["second_name"],
+                "frontend_value": second_name,
+                "result": "Pass" if second_name.lower() == db_data["second_name"] else "Fail"
+            },
+            {
+                "field": "age",
+                "backend_value": row["age"],
+                "frontend_value": age,
+                "result": "Pass" if age == db_data["age"] else "Fail"
+            },
+            {
+                "field": "gender",
+                "backend_value": row["gender"],
+                "frontend_value": gender,
+                "result": "Pass" if gender.lower() == db_data["gender"] else "Fail"
+            },
+            {
+                "field": "email",
+                "backend_value": row["email"],
+                "frontend_value": email,
+                "result": "Pass" if email.lower() == db_data["email"] else "Fail"
+            }
+        ]
+
+        # Manual match check
+        is_manual_match = all(comp["result"] == "Pass" for comp in comparisons)
+
+        field_comparisons.append({
+            "row_id": row["rowid"],
+            "comparisons": comparisons,
+            "manual_match_result": is_manual_match
+        })
+
+        # Return match immediately if manual match is True
+        if is_manual_match:
+            matched_student = dict(row)
+            matched_student["image_name"] = image_name
+            return jsonify({
+                "message": "Match found!",
+                "match": True,
+                "student": matched_student,
+                "field_comparisons": field_comparisons
+            }), 200
+
+    # Step 4: No match found
+    mismatch_fields = []
+    if rows:
+        db_data = {  # Use the last row's data for mismatch fields
+            "first_name": rows[-1]["first_name"].strip().lower(),
+            "second_name": rows[-1]["second_name"].strip().lower(),
+            "age": int(rows[-1]["age"]),
+            "gender": rows[-1]["gender"].strip().lower(),
+            "email": rows[-1]["email"].strip().lower()
+        }
+        mismatch_fields = [
+            field for field, input_val, db_val in [
+                ("first_name", first_name.lower(), db_data["first_name"]),
+                ("second_name", second_name.lower(), db_data["second_name"]),
+                ("age", age, db_data["age"]),
+                ("gender", gender.lower(), db_data["gender"]),
+                ("email", email.lower(), db_data["email"])
+            ] if inputNt_val != db_val
+        ]
+
+    return jsonify({
+        "message": "No match found.",
+        "match": False,
+        "student": {
+            "first_name": first_name,
+            "second_name": second_name,
+            "age": age,
+            "gender": gender,
+            "email": email,
+            "school_name": school_name if school_name else 'N/A',
+            "address": address if address else 'N/A',
+            "city": city if city else 'N/A',
+            "image_name": image_name if image_name else 'No Image'
+        },
+        "mismatch_fields": mismatch_fields,
+        "field_comparisons": field_comparisons
+    }), 200

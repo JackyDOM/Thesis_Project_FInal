@@ -341,12 +341,8 @@ def submit_student():
         city = request.form.get('city', '').strip()
 
         image = request.files.get('image')
-        image_name = None
-        if image:
-            image_name = image.filename
-            # Example: Save the image
-            # image.save(os.path.join('uploads', image_name))
-        
+        image_name = image.filename if image else None
+
         if not all([first_name, second_name, age, gender, email]):
             print(f"[Validation Error] Missing required fields")
             return jsonify({"error": "All required fields must be filled."}), 400
@@ -377,7 +373,8 @@ def submit_student():
 
     print(f"[DB Records] {rows}")
 
-    # Step 3: Compare each record
+    # Step 3: Compare each record and collect field comparisons
+    field_comparisons = []
     for row in rows:
         db_data = {
             "first_name": row["first_name"].strip().lower(),
@@ -394,15 +391,78 @@ def submit_student():
         print(f"  Gender: Input={gender.lower()}, DB={db_data['gender']}")
         print(f"  Email: Input={email.lower()}, DB={db_data['email']}")
 
-        # Manual match check (case-insensitive)
-        is_manual_match = (
-            first_name.lower() == db_data["first_name"] and
-            second_name.lower() == db_data["second_name"] and
-            age == db_data["age"] and
-            gender.lower() == db_data["gender"] and
-            email.lower() == db_data["email"]
-        )
+        # Field-by-field comparison
+        comparisons = [
+            {
+                "field": "first_name",
+                "backend_value": row["first_name"],
+                "frontend_value": first_name,
+                "result": "Pass" if first_name.lower() == db_data["first_name"] else "Fail"
+            },
+            {
+                "field": "second_name",
+                "backend_value": row["second_name"],
+                "frontend_value": second_name,
+                "result": "Pass" if second_name.lower() == db_data["second_name"] else "Fail"
+            },
+            {
+                "field": "age",
+                "backend_value": row["age"],
+                "frontend_value": age,
+                "result": "Pass" if age == db_data["age"] else "Fail"
+            },
+            {
+                "field": "gender",
+                "backend_value": row["gender"],
+                "frontend_value": gender,
+                "result": "Pass" if gender.lower() == db_data["gender"] else "Fail"
+            },
+            {
+                "field": "email",
+                "backend_value": row["email"],
+                "frontend_value": email,
+                "result": "Pass" if email.lower() == db_data["email"] else "Fail"
+            }
+        ]
+
+        # Manual match check
+        is_manual_match = all(comp["result"] == "Pass" for comp in comparisons)
         print(f"[Manual Match Result] {is_manual_match}")
+
+        # DeepSeek comparison (only if manual match fails)
+        deepseek_data = {}
+        if not is_manual_match:
+            prompt = (
+                f"Compare the following input and student record:\n\n"
+                f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
+                f"Record: First name: {row['first_name']}, Second name: {row['second_name']}, "
+                f"Age: {row['age']}, Gender: {row['gender']}, Email: {row['email']}\n\n"
+                f"Return only 'MATCH' or 'NOT MATCH' (in uppercase). Use case-insensitive comparison for strings and exact comparison for numbers."
+            )
+
+            print(f"[DeepSeek Prompt] {prompt}")
+            try:
+                response = query_deepseek(prompt)
+                print(f"[DeepSeek Response] {response}")
+                match = re.search(r'^(MATCH|NOT MATCH)$', response.strip().upper())
+                normalized_response = match.group(0) if match else "NOT MATCH"
+            except Exception as e:
+                normalized_response = "NOT MATCH"
+                print(f"[DeepSeek Error] Failed to get response: {str(e)}")
+            print(f"[Normalized DeepSeek Response] {normalized_response}")
+
+            deepseek_data = {
+                "prompt": prompt,
+                "response": response,
+                "normalized_response": normalized_response
+            }
+
+        field_comparisons.append({
+            "row_id": row["rowid"],
+            "comparisons": comparisons,
+            "manual_match_result": is_manual_match,
+            "deepseek": deepseek_data if deepseek_data else None
+        })
 
         # Return match immediately if manual match is True
         if is_manual_match:
@@ -412,45 +472,21 @@ def submit_student():
             return jsonify({
                 "message": "Match found!",
                 "match": True,
-                "student": matched_student
+                "student": matched_student,
+                "field_comparisons": field_comparisons
             }), 200
 
-        # Step 4: Use DeepSeek as a secondary check (only if manual match fails)
-        prompt = (
-            f"Compare the following input and student record:\n\n"
-            f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
-            f"Record: First name: {row['first_name']}, Second name: {row['second_name']}, "
-            f"Age: {row['age']}, Gender: {row['gender']}, Email: {row['email']}\n\n"
-            f"Return only 'MATCH' or 'NOT MATCH' (in uppercase). Use case-insensitive comparison for strings and exact comparison for numbers."
-        )
-
-        print(f"[DeepSeek Prompt] {prompt}")
-        try:
-            response = query_deepseek(prompt)
-            print(f"[DeepSeek Response] {response}")
-            # Strict parsing: only accept exact 'MATCH' or 'NOT MATCH'
-            match = re.search(r'^(MATCH|NOT MATCH)$', response.strip().upper())
-            normalized_response = match.group(0) if match else "NOT MATCH"  # Default to NOT MATCH if unclear
-        except Exception as e:
-            normalized_response = "NOT MATCH"  # Default to NOT MATCH on error
-            print(f"[DeepSeek Error] Failed to get response: {str(e)}")
-        print(f"[Normalized DeepSeek Response] {normalized_response}")
-
-        # Only accept DeepSeek MATCH if it aligns with manual logic or is explicitly clear
-        if normalized_response == "MATCH" and is_manual_match:  # Require manual match for DeepSeek to confirm
-            matched_student = dict(row)
-            matched_student["image_name"] = image_name
-            print(f"[Match Found] Row {row['rowid']} matched (DeepSeek)")
-            return jsonify({
-                "message": "Match found!",
-                "match": True,
-                "student": matched_student
-            }), 200
-
-    # Step 5: No match found
+    # Step 4: No match found
     print("[No Match] Returning no match")
     mismatch_fields = []
     if rows:
+        db_data = {
+            "first_name": rows[-1]["first_name"].strip().lower(),
+            "second_name": rows[-1]["second_name"].strip().lower(),
+            "age": int(rows[-1]["age"]),
+            "gender": rows[-1]["gender"].strip().lower(),
+            "email": rows[-1]["email"].strip().lower()
+        }
         mismatch_fields = [
             field for field, input_val, db_val in [
                 ("first_name", first_name.lower(), db_data["first_name"]),
@@ -475,7 +511,8 @@ def submit_student():
             "city": city if city else 'N/A',
             "image_name": image_name if image_name else 'No Image'
         },
-        "mismatch_fields": mismatch_fields
+        "mismatch_fields": mismatch_fields,
+        "field_comparisons": field_comparisons
     }), 200
 
 
