@@ -94,6 +94,13 @@ def home():
 def enternew():
     return render_template("student.html")
 
+def is_english_only(text):
+    try:
+        text.encode('ascii')
+        return True
+    except UnicodeEncodeError:
+        return False
+
 @app.route("/addrec", methods=['POST', 'GET'])
 def addrec():
     if request.method == 'POST':
@@ -113,20 +120,19 @@ def addrec():
                 pattern = r'^[a-zA-Z0-9\s.,-]+$'
                 return not bool(re.match(pattern, text))
 
-            fields_to_check = {
-                'First Name': first_name,
-                'Second Name': second_name,
-                'School Name': school_name,
-                'Address': addr,
-                'City': city
-            }
-            for field_name, value in fields_to_check.items():
+            for field_name, value in {
+            'First Name': first_name,
+            'Second Name': second_name,
+            'School Name': school_name,
+            'Address': addr,
+            'City': city
+            }.items():
                 if has_special_characters(value):
-                    msg = f"No special characters allowed in {field_name}"
-                    return render_template('result.html', data={"error": msg})
+                    return render_template('result.html', data={"error": f"No special characters allowed in {field_name}"})
+                if not is_english_only(value):
+                    return render_template('result.html', data={"error": f"English only is allowed in {field_name}"})
 
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-            if not re.match(email_pattern, email):
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
                 return render_template('result.html', data={"error": "Invalid email format"})
 
             # Handle image upload

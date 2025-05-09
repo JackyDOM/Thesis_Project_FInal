@@ -5,6 +5,11 @@
 {% block content %}
     <div class="policy-container">
         {% if data.error %}
+        <script>
+            alert("{{ data.error }}");  // You can replace this with a toast component if you use one.
+        </script>
+        {% endif %}
+        {% if data.error %}
             <p>Error: {{ data.error }}</p>
         {% elif data.message %}
             <p>{{ data.message }}</p>
