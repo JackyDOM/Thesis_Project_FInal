@@ -128,9 +128,9 @@ def addrec():
             'City': city
             }.items():
                 if has_special_characters(value):
-                    return render_template('result.html', data={"error": f"No special characters allowed in {field_name}"})
+                    return render_template('result.html', data={"error": f"English only is allowed in this field."})
                 if not is_english_only(value):
-                    return render_template('result.html', data={"error": f"English only is allowed in {field_name}"})
+                    return render_template('result.html', data={"error": f"English only is allowed in this field."})
 
             if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
                 return render_template('result.html', data={"error": "Invalid email format"})
