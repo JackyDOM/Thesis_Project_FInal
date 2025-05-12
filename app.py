@@ -673,9 +673,86 @@ import os
 import uuid
 import textwrap
 
-from PIL import Image, ImageDraw, ImageFont
-import os
-import uuid
+def generate_five_images():
+    font_size = 20
+    row_padding = 40
+    header_padding = 60
+    col_spacing = 60
+    margin_left = 20
+    margin_top = 20
+
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+
+    # Connect to database
+    with sqlite3.connect("database.db") as con:
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        cur.execute("""SELECT first_name, second_name, age, gender, email, 
+                       school_name, addr, city FROM students""")
+        db_rows = cur.fetchall()
+
+    if not db_rows:
+        raise ValueError("No data found in the database.")
+
+    all_results = [dict(row) for row in db_rows]
+    original_headers = list(all_results[0].keys())
+
+    dummy_img = Image.new("RGB", (1, 1))
+    draw = ImageDraw.Draw(dummy_img)
+
+    # Output folder
+    output_folder = os.path.join("static", "generate_test_case")
+    os.makedirs(output_folder, exist_ok=True)
+
+    row_height = int(font_size * 1.5)
+    content_height = header_padding + (row_height + row_padding) * len(all_results)
+    total_height = margin_top + content_height + 20
+
+    # Generate 5 images with rotated column headers
+    for i in range(5):
+        # Rotate headers
+        headers = original_headers[i:] + original_headers[:i]
+
+        # Calculate column widths based on rotated headers
+        col_widths = []
+        for header in headers:
+            max_width = draw.textbbox((0, 0), header, font=font)[2]
+            for row in all_results:
+                text_width = draw.textbbox((0, 0), str(row[header]), font=font)[2]
+                max_width = max(max_width, text_width)
+            col_widths.append(max_width + 10)
+
+        total_width = sum(col_widths) + (len(headers) - 1) * col_spacing + 2 * margin_left
+
+        # Create image
+        img = Image.new("RGB", (total_width, total_height), color="white")
+        draw = ImageDraw.Draw(img)
+
+        # Draw headers
+        x_offset = margin_left
+        y_offset = margin_top
+        for j, header in enumerate(headers):
+            draw.text((x_offset, y_offset), header, font=font, fill="black")
+            x_offset += col_widths[j] + col_spacing
+        y_offset += header_padding
+
+        # Draw data rows
+        for row in all_results:
+            x_offset = margin_left
+            for j, header in enumerate(headers):
+                draw.text((x_offset, y_offset), str(row[header]), font=font, fill="black")
+                x_offset += col_widths[j] + col_spacing
+            y_offset += row_height + row_padding
+
+        # Save image
+        image_filename = f"students_rotated_{i + 1}.png"
+        image_path = os.path.join(output_folder, image_filename)
+        img.save(image_path)
+        print(f"Image saved: {image_path}")
+
 
 def create_image_from_results(results):
     # Adjusted parameters to match the image
@@ -830,4 +907,5 @@ def displayResult():
     return render_template("displayResult.html")
 
 if __name__ == "__main__":
+    generate_five_images()
     app.run(debug=True)
