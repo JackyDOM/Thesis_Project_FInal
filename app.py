@@ -711,8 +711,8 @@ def generate_five_images():
     content_height = header_padding + (row_height + row_padding) * len(all_results)
     total_height = margin_top + content_height + 20
 
-    # Generate 5 images with rotated column headers
-    for i in range(5):
+    # Generate images with rotated column headers
+    for i in range(10):
         # Rotate headers
         headers = original_headers[i:] + original_headers[:i]
 
