@@ -907,5 +907,5 @@ def displayResult():
     return render_template("displayResult.html")
 
 if __name__ == "__main__":
-    generate_five_images()
+    # generate_five_images()
     app.run(debug=True)
