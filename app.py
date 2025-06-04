@@ -906,6 +906,6 @@ def download_file(filename):
 def displayResult():
     return render_template("displayResult.html")
 
-if __name__ == "__main__":
-    # generate_five_images()
-    app.run(debug=True)
+# if __name__ == "__main__":
+#     # generate_five_images()
+#     serve(app, host='127.0.0.1', port=5000)
