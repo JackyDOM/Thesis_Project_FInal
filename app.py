@@ -435,7 +435,7 @@ def submit_student():
         is_manual_match = all(comp["result"] == "Pass" for comp in comparisons)
         print(f"[Manual Match Result] {is_manual_match}")
 
-        # DeepSeek comparison (only if manual match fails)
+        # verification step DeepSeek comparison (only if manual match fails)
         deepseek_data = {}
         if not is_manual_match:
             prompt = (
