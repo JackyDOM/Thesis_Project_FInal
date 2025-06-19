@@ -1,6 +1,10 @@
+Flask
+Flask-Cors
+openpyxl
+pandas
+torch
+transformers
+waitress
+pillow
 ipykernel
 huggingface_hub
-
-pillow
-openpyxl
-waitress
