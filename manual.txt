@@ -1,0 +1,309 @@
+# Route to handle the form submission (POST request)
+@app.route('/submit_student', methods=['POST'])
+def submit_student():
+    # Step 1: Get data from frontend (multipart/form-data)
+    try:
+
+        first_name = request.form.get('first_name', '').strip()
+        second_name = request.form.get('second_name', '').strip()
+        age = request.form.get('age', '').strip()
+        gender = request.form.get('gender', '').strip().lower()
+        email = request.form.get('email', '').strip().lower()
+        school_name = request.form.get('school_name', '').strip()
+        address = request.form.get('address', request.form.get('addr', '')).strip()
+        city = request.form.get('city', '').strip()
+
+        image = request.files.get('image')
+        image_name = image.filename if image else None
+
+        if not all([first_name, second_name, age, gender, email]):
+            print(f"[Validation Error] Missing required fields")
+            return jsonify({"error": "All required fields must be filled."}), 400
+
+        try:
+            age = int(age)
+        except ValueError:
+            print(f"[Validation Error] Invalid age: {age}")
+            return jsonify({"error": "Age must be a valid number."}), 400
+
+        print(f"[Frontend Data] {first_name}, {second_name}, {age}, {gender}, {email}, {school_name}, {address}, {city}, {image_name}")
+
+    except Exception as e:
+        print(f"[Error] Failed to parse form data: {str(e)}")
+        return jsonify({"error": "Invalid form data."}), 400
+
+    # Step 2: Fetch student records from DB
+    try:
+        con = sqlite3.connect("database.db")
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        cur.execute("SELECT rowid, * FROM students")
+        rows = cur.fetchall()
+        con.close()
+    except Exception as e:
+        print(f"[Error] Database error: {str(e)}")
+        return jsonify({"error": "Database error."}), 500
+
+    print(f"[DB Records] {rows}")
+
+    # Step 3: Compare each record and collect field comparisons
+    ocr_records = []
+    ocr_json_path = os.path.join('ocr', 'extract_ocr', 'ocr_output.json')
+    try:
+        if os.path.exists(ocr_json_path):
+            with open(ocr_json_path, 'r', encoding='utf-8') as f:
+                ocr_json_data = json.load(f)
+            
+            # Group OCR entries by approximate y-coordinate to identify rows
+            rows_by_y = {}
+            for entry in ocr_json_data:
+                y_top = entry['bounding_box'][0][1]
+                # Group entries within 10 pixels of the same y-coordinate
+                y_key = round(y_top / 10) * 10
+                if y_key not in rows_by_y:
+                    rows_by_y[y_key] = []
+                rows_by_y[y_key].append(entry)
+            
+            # Sort rows by y-coordinate
+            sorted_y_keys = sorted(rows_by_y.keys())
+            field_map = {
+                'First Name': 'First Name',
+                'Second Name': 'Second Name',
+                'Age': 'Age',
+                'Gender': 'Gender',
+                'Email': 'Email',
+                'School Name': 'School Name',
+                'Address': 'Address',
+                'City': 'City',
+                'Result': 'Result'
+            }
+            expected_fields = ['First Name', 'Second Name', 'Age', 'Gender', 'Email']
+            header_row = None
+            field_order = ['First Name', 'Second Name', 'Age', 'Gender', 'Email', 'School Name', 'Address', 'City', 'Result']
+
+            for y_key in sorted_y_keys:
+                row_entries = sorted(rows_by_y[y_key], key=lambda x: x['bounding_box'][0][0])  # Sort by x-coordinate
+                row_texts = [entry['text'].strip() for entry in row_entries]
+                print(f"[Processing OCR Row] y={y_key}, texts={row_texts}")
+
+                # Detect header row
+                if not header_row and all(text in field_map for text in row_texts[:len(field_order)]):
+                    header_row = row_texts[:len(field_order)]
+                    print(f"[Header Row Detected] {header_row}")
+                    continue
+
+                # Process data row
+                if len(row_texts) >= len(expected_fields):
+                    current_record = {}
+                    for i, text in enumerate(row_texts):
+                        if i < len(field_order):
+                            current_record[field_order[i]] = text
+                    if all(field in current_record for field in expected_fields):
+                        ocr_records.append(current_record)
+                        print(f"[Added OCR Record] {current_record}")
+
+            print(f"[OCR Records] {ocr_records}")
+        else:
+            print(f"[Warning] OCR JSON file not found at {ocr_json_path}")
+            ocr_records = []
+    except Exception as e:
+        print(f"[Error] Failed to read OCR JSON: {str(e)}")
+        ocr_records = []
+
+    # Step 4: Compare each record and collect field comparisons   
+    field_comparisons = []
+    for row in rows:
+        db_data = {
+            "first_name": row["first_name"].strip().lower(),
+            "second_name": row["second_name"].strip().lower(),
+            "age": int(row["age"]),
+            "gender": row["gender"].strip().lower(),
+            "email": row["email"].strip().lower()
+        }
+
+        print(f"[Comparing Row {row['rowid']}]")
+        print(f"  First Name: Input={first_name.lower()}, DB={db_data['first_name']}")
+        print(f"  Second Name: Input={second_name.lower()}, DB={db_data['second_name']}")
+        print(f"  Age: Input={age}, DB={db_data['age']}, Types: {type(age)}, {type(db_data['age'])}")
+        print(f"  Gender: Input={gender.lower()}, DB={db_data['gender']}")
+        print(f"  Email: Input={email.lower()}, DB={db_data['email']}")
+
+        # Field-by-field comparison
+        comparisons = [
+            {
+                "field": "first_name",
+                "backend_value": row["first_name"],
+                "frontend_value": first_name,
+                "result": "Pass" if first_name.lower() == db_data["first_name"] else "Fail"
+            },
+            {
+                "field": "second_name",
+                "backend_value": row["second_name"],
+                "frontend_value": second_name,
+                "result": "Pass" if second_name.lower() == db_data["second_name"] else "Fail"
+            },
+            {
+                "field": "age",
+                "backend_value": row["age"],
+                "frontend_value": age,
+                "result": "Pass" if age == db_data["age"] else "Fail"
+            },
+            {
+                "field": "gender",
+                "backend_value": row["gender"],
+                "frontend_value": gender,
+                "result": "Pass" if gender.lower() == db_data["gender"] else "Fail"
+            },
+            {
+                "field": "email",
+                "backend_value": row["email"],
+                "frontend_value": email,
+                "result": "Pass" if email.lower() == db_data["email"] else "Fail"
+            }
+        ]
+
+        is_manual_match = all(comp["result"] == "Pass" for comp in comparisons)
+        print(f"[Manual Match Result] {is_manual_match}")
+
+        # DeepSeek verification for OCR text vs DB
+        deepseek_data = {}
+        ocr_match = False
+
+        # Find matching OCR record
+        matching_ocr_record = None
+        for ocr_record in ocr_records:
+            try:
+                ocr_first_name = ocr_record.get('First Name', '').strip().lower()
+                ocr_second_name = ocr_record.get('Second Name', '').strip().lower()
+                ocr_age = int(ocr_record.get('Age', '0'))
+                ocr_gender = ocr_record.get('Gender', '').strip().lower()
+                ocr_email = normalize_email(ocr_record.get('Email', '').strip().lower())
+
+                # print(f"[OCR Match Check] Row {row['rowid']}: OCR={ocr_first_name}, {ocr_second_name}, {ocr_age}, {ocr_gender}, {ocr_email}")
+                # print(f"[DB Data] {db_data['first_name']}, {db_data['second_name']}, {db_data['age']}, {db_data['gender']}, {db_data['email']}")
+
+                if (ocr_first_name == db_data['first_name'] and
+                    ocr_second_name == db_data['second_name'] and
+                    ocr_age == db_data['age'] and
+                    ocr_gender == db_data['gender'] and
+                    ocr_email == db_data['email']):
+                    matching_ocr_record = ocr_record
+                    print(f"[Found Matching OCR Record] {matching_ocr_record}")
+                    break
+            except ValueError as ve:
+                # print(f"[OCR Match Error] Skipping record {ocr_record} due to: {ve}")
+                continue
+
+        # Prepare DeepSeek prompt
+        if matching_ocr_record:
+            ocr_text_segment = (
+                f"{matching_ocr_record.get('First Name', '')} "
+                f"{matching_ocr_record.get('Second Name', '')} "
+                f"{matching_ocr_record.get('Age', '')} "
+                f"{matching_ocr_record.get('Gender', '')} "
+                f"{matching_ocr_record.get('Email', '')}"
+            ).strip()
+        else:
+            ocr_text_segment = "No matching OCR record found"
+
+        prompt = (
+            f"Compare the following records field by field:\n\n"
+            f"OCR Record: {ocr_text_segment}\n"
+            f"Student Record: First Name: {row['first_name']}, Second Name: {row['second_name']}, "
+            f"Age: {row['age']}, Gender: {row['gender']}, Email: {normalize_email(row['email'])}\n\n"
+            f"Return ONLY 'MATCH' or 'NOT MATCH' in uppercase. "
+            f"Return 'MATCH' if ALL fields (First Name, Second Name, Age, Gender, Email) match, "
+            f"using case-insensitive comparison for strings, exact comparison for numbers, "
+            f"and normalizing emails by removing spaces. Return 'NOT MATCH' otherwise. "
+            f"Do NOT include examples or explanations."
+        )
+
+        print(f"[DeepSeek Prompt for OCR] {prompt}")
+        try:
+            response = query_deepseek(prompt)
+            print(f"[Raw DeepSeek Output] {response}")
+            # Extract MATCH or NOT MATCH from response
+            response_upper = response.strip().upper()
+            match = re.search(r'\b(MATCH|NOT MATCH)\b', response_upper)
+            normalized_response = match.group(0) if match else "NOT MATCH"
+            ocr_match = normalized_response == "MATCH"
+            print(f"[DeepSeek Response] {response}")
+            print(f"[Normalized DeepSeek Response] {normalized_response}")
+        except Exception as e:
+            normalized_response = "NOT MATCH"
+            ocr_match = False
+            print(f"[DeepSeek Error] Failed to get response: {str(e)}")
+
+         # Fallback to manual OCR match if DeepSeek response is invalid
+        if not ocr_match and matching_ocr_record:
+            try:
+                ocr_first_name = matching_ocr_record.get('First Name', '').strip().lower()
+                ocr_second_name = matching_ocr_record.get('Second Name', '').strip().lower()
+                ocr_age = int(matching_ocr_record.get('Age', '0'))
+                ocr_gender = matching_ocr_record.get('Gender', '').strip().lower()
+                ocr_email = normalize_email(matching_ocr_record.get('Email', '').strip().lower())
+                if (ocr_first_name == db_data['first_name'] and
+                    ocr_second_name == db_data['second_name'] and
+                    ocr_age == db_data['age'] and
+                    ocr_gender == db_data['gender'] and
+                    ocr_email == db_data['email']):
+                    normalized_response = "MATCH"
+                    ocr_match = True
+                    print(f"[DeepSeek Fallback] OCR match confirmed")
+            except ValueError as ve:
+                print(f"[DeepSeek Fallback Error] {ve}")
+
+        deepseek_data = {
+            "ocr_comparison": {
+                "prompt": prompt,
+                "response": response,
+                "normalized_response": normalized_response,
+                "ocr_match": ocr_match
+            }
+        }
+
+        # DeepSeek verification for frontend input vs DB
+        if not is_manual_match:
+            prompt = (
+                f"Compare the following input and student record:\n\n"
+                f"Input: First name: {first_name}, Second name: {second_name}, Age: {age}, Gender: {gender}, Email: {email}\n"
+                f"Record: First name: {row['first_name']}, Second name: {row['second_name']}, "
+                f"Age: {row['age']}, Gender: {row['gender']}, Email: {row['email']}\n\n"
+                f"Return only 'MATCH' or 'NOT MATCH' (in uppercase). Use case-insensitive comparison for strings and exact comparison for numbers."
+            )
+
+            print(f"[DeepSeek Prompt] {prompt}")
+            try:
+                response = query_deepseek(prompt)
+                print(f"[DeepSeek Response] {response}")
+                match = re.search(r'^(MATCH|NOT MATCH)$', response.strip().upper())
+                normalized_response = match.group(0) if match else "NOT MATCH"
+            except Exception as e:
+                normalized_response = "NOT MATCH"
+                print(f"[DeepSeek Error] Failed to get response: {str(e)}")
+            print(f"[Normalized DeepSeek Response] {normalized_response}")
+
+            deepseek_data = {
+                "prompt": prompt,
+                "response": response,
+                "normalized_response": normalized_response
+            }
+
+        field_comparisons.append({
+            "row_id": row["rowid"],
+            "comparisons": comparisons,
+            "manual_match_result": is_manual_match,
+            "deepseek": deepseek_data if deepseek_data else None
+        })
+
+        # Return match immediately if manual match is True
+        if is_manual_match:
+            matched_student = dict(row)
+            matched_student["image_name"] = image_name
+            print(f"[Match Found] Row {row['rowid']} matched (Manual Match)")
+            return jsonify({
+                "message": "Match found!",
+                "match": True,
+                "student": matched_student,
+                "field_comparisons": field_comparisons
+            }), 200
